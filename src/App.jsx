@@ -378,13 +378,27 @@ function CellsPanel({ session, showToast }) {
 
   async function save() {
     if (!form.name.trim()) { showToast("Nome é obrigatório","error"); return }
-    const payload = {...form, name:form.name.trim().toUpperCase()}
+    const payload = {
+      name: form.name.trim().toUpperCase(),
+      day: form.day,
+      time: form.time,
+      neighborhood: form.neighborhood,
+      street: form.street,
+      number: form.number,
+      cep: form.cep,
+      leader_id: form.leader_id || null,
+      secretary_id: form.secretary_id || null,
+      host_id: form.host_id || null,
+      supervisor_id: form.supervisor_id || null,
+    }
     if (editing) {
-      await supabase.from("cells").update(payload).eq("id",editing)
+      const {error} = await supabase.from("cells").update(payload).eq("id",editing)
+      if (error) { showToast("Erro ao atualizar: "+error.message,"error"); return }
       await addLog(session,"update",`Célula atualizada: ${form.name}`)
       showToast("Célula atualizada!")
     } else {
-      await supabase.from("cells").insert(payload)
+      const {error} = await supabase.from("cells").insert(payload)
+      if (error) { showToast("Erro ao criar: "+error.message,"error"); return }
       await addLog(session,"create",`Célula criada: ${form.name}`)
       showToast("Célula criada!")
     }
@@ -484,17 +498,36 @@ function MembersPanel({ session, showToast }) {
   async function save() {
     if (!form.name.trim()) { showToast("Nome é obrigatório","error"); return }
     const cpfNorm = form.cpf.replace(/\D/g,"")
-    const payload = {...form, name:form.name.trim().toUpperCase(), cpf:cpfNorm, age:form.dob?calcAge(form.dob):(parseInt(form.age)||0)}
+    const payload = {
+      name: form.name.trim().toUpperCase(),
+      cpf: cpfNorm,
+      age: form.dob ? calcAge(form.dob) : (parseInt(form.age)||0),
+      dob: form.dob || null,
+      gender: form.gender,
+      phone: form.phone,
+      email: form.email,
+      neighborhood: form.neighborhood,
+      cell_id: form.cell_id || null,
+      status: form.status,
+      role: form.role,
+      baptism_date: form.baptism_date || null,
+      invited_by: form.invited_by,
+      father_name: form.father_name,
+      mother_name: form.mother_name,
+      spouse_name: form.spouse_name,
+    }
     if (editing) {
-      await supabase.from("members").update(payload).eq("id",editing)
-      await supabase.from("users").update({role:form.role,cell_id:form.cell_id}).eq("member_id",editing)
+      const {error} = await supabase.from("members").update(payload).eq("id",editing)
+      if (error) { showToast("Erro: "+error.message,"error"); return }
+      await supabase.from("users").update({role:form.role,cell_id:form.cell_id||null}).eq("member_id",editing)
       await addLog(session,"update",`Membro atualizado: ${form.name}`)
       showToast("Membro atualizado!")
     } else {
-      const {data:newM} = await supabase.from("members").insert(payload).select().single()
+      const {data:newM, error} = await supabase.from("members").insert(payload).select().single()
+      if (error) { showToast("Erro: "+error.message,"error"); return }
       if (newM) {
         const cpfLogin = cpfNorm || `TMP_${newM.id}`
-        await supabase.from("users").insert({member_id:newM.id,cpf:cpfLogin,password_hash:btoa64("123456"),name:form.name.trim().toUpperCase(),role:form.role,cell_id:form.cell_id})
+        await supabase.from("users").insert({member_id:newM.id,cpf:cpfLogin,password_hash:btoa64("123456"),name:form.name.trim().toUpperCase(),role:form.role,cell_id:form.cell_id||null})
         await addLog(session,"create",`Membro criado: ${form.name}`)
         showToast("Membro criado! Senha padrão: 123456")
       }
