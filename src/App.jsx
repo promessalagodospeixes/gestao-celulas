@@ -181,12 +181,14 @@ function LoginPage({ onLogin, showToast }) {
   const [err, setErr] = useState("")
   const [loading, setLoading] = useState(false)
 
-  async function handleLogin(e) {
+async function handleLogin(e) {
     e.preventDefault()
     setErr(""); setLoading(true)
-    const norm = normCPF(cpf)
-    const { data, error } = await supabase.from("users").select("*").eq("cpf", norm).single()
-    if (error || !data) { setErr("CPF não encontrado"); setLoading(false); return }
+    const norm = cpf.replace(/\D/g, "")
+    const { data:d1 } = await supabase.from("users").select("*").eq("cpf", norm).single()
+    const { data:d2 } = await supabase.from("users").select("*").eq("cpf", cpf).single()
+    const data = d1 || d2
+    if (!data) { setErr("CPF não encontrado"); setLoading(false); return }
     const stored = atob64(data.password_hash)
     if (stored !== pw) { setErr("Senha incorreta"); setLoading(false); return }
     setLoading(false)
