@@ -10,17 +10,15 @@ const STATUS_LIST = ["Visitante","Membro","Interessado","Afastado"]
 function fmtDate(d) { if(!d) return "—"; try { const [y,m,day]=d.split("-"); return `${day}/${m}/${y}`; } catch { return d; } }
 function calcAge(dob) { if(!dob) return null; const b=new Date(dob),n=new Date(); let a=n.getFullYear()-b.getFullYear(); if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate())) a--; return a; }
 function fmtCPF(v) { const d=v.replace(/\D/g,""); if(d.length>9) return d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6,9)+"-"+d.slice(9,11); if(d.length>6) return d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6); if(d.length>3) return d.slice(0,3)+"."+d.slice(3); return d; }
-function normCPF(v) { return v.replace(/\D/g,""); }
 function todayStr() { return new Date().toISOString().split("T")[0]; }
-function btoa64(s) { return btoa(s); }
-function atob64(s) { try { return atob(s); } catch { return s; } }
+function btoa64(s) { return btoa(unescape(encodeURIComponent(s))); }
+function atob64(s) { try { return decodeURIComponent(escape(atob(s))); } catch { return s; } }
 
 // ─── ICONS ────────────────────────────────────────────────────────────────────
 const Icon = ({ name, size=18 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
     {name==="church"&&<><path d="M12 2v5M9.5 4.5h5M5 10h14M5 10v10h5v-5h4v5h5V10M12 7v3"/></>}
     {name==="users"&&<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>}
-    {name==="user-plus"&&<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></>}
     {name==="check-circle"&&<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>}
     {name==="bar-chart"&&<><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>}
     {name==="send"&&<><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>}
@@ -42,8 +40,8 @@ const Icon = ({ name, size=18 }) => (
     {name==="eye"&&<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
     {name==="eye-off"&&<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>}
     {name==="search"&&<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>}
-    {name==="refresh"&&<><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></>}
     {name==="home"&&<><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>}
+    {name==="user-plus"&&<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></>}
   </svg>
 )
 
@@ -54,7 +52,7 @@ const Avatar = ({ name, size=36, color="#1e40af" }) => {
 }
 
 const Badge = ({ label, color="#1e40af" }) => (
-  <span style={{background:color+"18",color,fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,letterSpacing:"0.02em",whiteSpace:"nowrap"}}>{label}</span>
+  <span style={{background:color+"18",color,fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,whiteSpace:"nowrap"}}>{label}</span>
 )
 
 const Btn = ({ children, onClick, variant="primary", size="md", full=false, disabled=false, icon=null, style:extra={} }) => {
@@ -135,7 +133,6 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [page, setPage] = useState("login")
   const [toast, setToast] = useState({msg:"",type:"success"})
-  const [loading, setLoading] = useState(false)
 
   const showToast = useCallback((msg, type="success") => {
     setToast({msg,type})
@@ -162,7 +159,6 @@ export default function App() {
         input,select,textarea{font-family:'Outfit',sans-serif}
       `}</style>
       <Toast msg={toast.msg} type={toast.type}/>
-
       {page==="login" && <LoginPage onLogin={doLogin} showToast={showToast}/>}
       {page==="admin" && <AdminDashboard session={session} logout={doLogout} showToast={showToast}/>}
       {page==="secretary" && <SecretaryDashboard session={session} logout={doLogout} showToast={showToast}/>}
@@ -181,16 +177,28 @@ function LoginPage({ onLogin, showToast }) {
   const [err, setErr] = useState("")
   const [loading, setLoading] = useState(false)
 
-async function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault()
     setErr(""); setLoading(true)
-    const norm = cpf.replace(/\D/g, "")
-    const { data:d1 } = await supabase.from("users").select("*").eq("cpf", norm).single()
-    const { data:d2 } = await supabase.from("users").select("*").eq("cpf", cpf).single()
-    const data = d1 || d2
+    
+    // Tenta buscar com CPF formatado E sem formatação
+    const cpfFormatado = fmtCPF(cpf.replace(/\D/g,""))
+    const cpfSoNumeros = cpf.replace(/\D/g,"")
+    
+    // Busca com formato 159.098.157-09
+    let { data } = await supabase.from("users").select("*").eq("cpf", cpfFormatado).single()
+    
+    // Se não achou, tenta sem formatação 15909815709
+    if (!data) {
+      const res2 = await supabase.from("users").select("*").eq("cpf", cpfSoNumeros).single()
+      data = res2.data
+    }
+    
     if (!data) { setErr("CPF não encontrado"); setLoading(false); return }
+    
     const stored = atob64(data.password_hash)
     if (stored !== pw) { setErr("Senha incorreta"); setLoading(false); return }
+    
     setLoading(false)
     onLogin(data)
   }
@@ -208,8 +216,14 @@ async function handleLogin(e) {
         <form onSubmit={handleLogin}>
           <div style={{marginBottom:16}}>
             <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7dd3fc",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>CPF</label>
-            value={cpf} onChange={e=>setCpf(e.target.value.replace(/\D/g,""))}
- placeholder="000.000.000-00" maxLength={14} required style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 16px",fontSize:15,color:"#f0f9ff",outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
+            <input
+              value={cpf}
+              onChange={e=>setCpf(e.target.value)}
+              placeholder="000.000.000-00"
+              maxLength={14}
+              required
+              style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 16px",fontSize:15,color:"#f0f9ff",outline:"none",fontFamily:"'Outfit',sans-serif"}}
+            />
           </div>
           <div style={{marginBottom:8,position:"relative"}}>
             <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7dd3fc",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Senha</label>
@@ -221,13 +235,13 @@ async function handleLogin(e) {
             {loading?"Entrando...":"Entrar"}
           </button>
         </form>
-        <p style={{color:"#93c5fd",fontSize:12,textAlign:"center",marginTop:16,opacity:0.7}}>Primeiro acesso: CPF 15909815709 • senha 123456</p>
+        <p style={{color:"#93c5fd",fontSize:12,textAlign:"center",marginTop:16,opacity:0.7}}>Digite seu CPF e senha para entrar</p>
       </div>
     </div>
   )
 }
 
-// ─── HOOK: useData (fetch + realtime) ─────────────────────────────────────────
+// ─── HOOK: useTable ────────────────────────────────────────────────────────────
 function useTable(table, filter=null) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
@@ -252,26 +266,28 @@ function useTable(table, filter=null) {
   return { data, loading, reload:load }
 }
 
+async function addLog(session, action, detail) {
+  await supabase.from("logs").insert({action,detail,user_id:session?.id})
+}
+
 // ─── HEADER ───────────────────────────────────────────────────────────────────
-function Header({ title, subtitle, logout, extra=null }) {
+function Header({ title, subtitle, logout }) {
   return (
     <header style={{background:"#0f172a",padding:"16px 18px",position:"sticky",top:0,zIndex:100}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div><div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>{title}</div>
+        <div>
+          <div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>{title}</div>
           {subtitle&&<div style={{color:"#7dd3fc",fontSize:12,fontWeight:500,marginTop:2}}>{subtitle}</div>}
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {extra}
-          <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"#cbd5e1",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:600}}>
-            <Icon name="log-out" size={15}/>Sair
-          </button>
-        </div>
+        <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"#cbd5e1",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:600}}>
+          <Icon name="log-out" size={15}/>Sair
+        </button>
       </div>
     </header>
   )
 }
 
-// ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
 function AdminDashboard({ session, logout, showToast }) {
   const [tab, setTab] = useState("dashboard")
   const tabs = [
@@ -288,7 +304,8 @@ function AdminDashboard({ session, logout, showToast }) {
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <header style={{background:"#0f172a",padding:"14px 18px 0",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div><div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>Painel do Gestor</div>
+          <div>
+            <div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>Painel do Gestor</div>
             <div style={{color:"#7dd3fc",fontSize:12}}>{session?.name}</div>
           </div>
           <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"#cbd5e1",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:600}}>
@@ -341,9 +358,8 @@ function AdminOverview({ session, showToast, setTab }) {
   )
 }
 
-// ─── CELLS PANEL ──────────────────────────────────────────────────────────────
 function CellsPanel({ session, showToast }) {
-  const { data:cells, loading, reload } = useTable("cells")
+  const { data:cells, loading } = useTable("cells")
   const { data:members } = useTable("members")
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -399,7 +415,8 @@ function CellsPanel({ session, showToast }) {
         return (
           <Card key={cell.id} style={{marginBottom:10}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
-              <div><div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{cell.name}</div>
+              <div>
+                <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{cell.name}</div>
                 <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{cell.neighborhood||"—"} • {cell.day} às {cell.time||"—"}</div>
               </div>
               <div style={{display:"flex",gap:5}}>
@@ -417,12 +434,11 @@ function CellsPanel({ session, showToast }) {
           </Card>
         )
       })}
-
       <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Célula":"Nova Célula"}>
         <Inp label="Nome" value={form.name} onChange={v=>f("name")(v.toUpperCase())} required/>
         <Sel label="Dia" value={form.day} onChange={f("day")} options={DAYS.map(d=>({value:d,label:d}))}/>
         <Inp label="Horário" type="time" value={form.time} onChange={f("time")}/>
-        <Inp label="CEP" value={form.cep} onChange={v=>{f("cep")(v);searchCep(v)}} placeholder="00000-000" maxLength={9}/>
+        <Inp label="CEP" value={form.cep} onChange={v=>{f("cep")(v);searchCep(v)}} placeholder="00000-000"/>
         <Inp label="Rua/Avenida" value={form.street} onChange={f("street")}/>
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
           <Inp label="Bairro" value={form.neighborhood} onChange={f("neighborhood")}/>
@@ -434,13 +450,11 @@ function CellsPanel({ session, showToast }) {
         <Sel label="Supervisor" value={form.supervisor_id} onChange={f("supervisor_id")} options={mOpts}/>
         <Btn full onClick={save} style={{marginTop:8}}>{editing?"Salvar Alterações":"Criar Célula"}</Btn>
       </Modal>
-
       <Modal open={!!linkModal} onClose={()=>setLinkModal(null)} title="Link de Cadastro">
-        <p style={{fontSize:13,color:"#64748b",marginBottom:12}}>Compartilhe com novos membros para se cadastrarem:</p>
+        <p style={{fontSize:13,color:"#64748b",marginBottom:12}}>Compartilhe com novos membros:</p>
         <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#334155",wordBreak:"break-all",border:"1.5px solid #e2e8f0",marginBottom:14}}>{linkModal}</div>
         <Btn full icon="copy" onClick={()=>{navigator.clipboard.writeText(linkModal||"");showToast("Link copiado!")}}>Copiar Link</Btn>
       </Modal>
-
       {deleteId && <Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}>
         <p style={{color:"#64748b",marginBottom:16}}>Tem certeza que deseja remover esta célula?</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -452,7 +466,6 @@ function CellsPanel({ session, showToast }) {
   )
 }
 
-// ─── MEMBERS PANEL ────────────────────────────────────────────────────────────
 function MembersPanel({ session, showToast }) {
   const { data:members, loading } = useTable("members")
   const { data:cells } = useTable("cells")
@@ -470,7 +483,8 @@ function MembersPanel({ session, showToast }) {
 
   async function save() {
     if (!form.name.trim()) { showToast("Nome é obrigatório","error"); return }
-    const payload = {...form, name:form.name.trim().toUpperCase(), cpf:normCPF(form.cpf), age:form.dob?calcAge(form.dob):(parseInt(form.age)||0)}
+    const cpfNorm = form.cpf.replace(/\D/g,"")
+    const payload = {...form, name:form.name.trim().toUpperCase(), cpf:cpfNorm, age:form.dob?calcAge(form.dob):(parseInt(form.age)||0)}
     if (editing) {
       await supabase.from("members").update(payload).eq("id",editing)
       await supabase.from("users").update({role:form.role,cell_id:form.cell_id}).eq("member_id",editing)
@@ -479,7 +493,8 @@ function MembersPanel({ session, showToast }) {
     } else {
       const {data:newM} = await supabase.from("members").insert(payload).select().single()
       if (newM) {
-        await supabase.from("users").insert({member_id:newM.id,cpf:normCPF(form.cpf)||`TMP_${newM.id}`,password_hash:btoa64("123456"),name:form.name.trim().toUpperCase(),role:form.role,cell_id:form.cell_id})
+        const cpfLogin = cpfNorm || `TMP_${newM.id}`
+        await supabase.from("users").insert({member_id:newM.id,cpf:cpfLogin,password_hash:btoa64("123456"),name:form.name.trim().toUpperCase(),role:form.role,cell_id:form.cell_id})
         await addLog(session,"create",`Membro criado: ${form.name}`)
         showToast("Membro criado! Senha padrão: 123456")
       }
@@ -542,7 +557,6 @@ function MembersPanel({ session, showToast }) {
           </Card>
         )
       })}
-
       <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Membro":"Novo Membro"}>
         <Inp label="Nome Completo" value={form.name} onChange={v=>f("name")(v.toUpperCase())} required/>
         <Sel label="Status" value={form.status} onChange={f("status")} options={STATUS_LIST.map(s=>({value:s,label:s}))}/>
@@ -567,13 +581,11 @@ function MembersPanel({ session, showToast }) {
         </div>
         <Btn full onClick={save} style={{marginTop:8}}>{editing?"Salvar Alterações":"Criar Membro"}</Btn>
       </Modal>
-
       {pwModal&&<Modal open title="Redefinir Senha" onClose={()=>setPwModal(null)}>
         <p style={{fontSize:13,color:"#64748b",marginBottom:12}}>Nova senha para este membro:</p>
         <Inp label="Nova Senha" type="password" value={newPw} onChange={setNewPw} placeholder="Mínimo 6 caracteres"/>
         <Btn full onClick={resetPw}>Redefinir Senha</Btn>
       </Modal>}
-
       {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}>
         <p style={{color:"#64748b",marginBottom:16}}>Remover este membro e seu acesso ao sistema?</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -585,11 +597,10 @@ function MembersPanel({ session, showToast }) {
   )
 }
 
-// ─── ATTENDANCE PANEL ─────────────────────────────────────────────────────────
 function AttendancePanel({ session, showToast }) {
   const { data:cells } = useTable("cells")
   const { data:members } = useTable("members")
-  const { data:allAtt, reload } = useTable("attendance")
+  const { data:allAtt } = useTable("attendance")
   const [cellId, setCellId] = useState("")
   const [date, setDate] = useState(todayStr())
   const [theme, setTheme] = useState("")
@@ -623,7 +634,6 @@ function AttendancePanel({ session, showToast }) {
           <Inp label="Tema" value={theme} onChange={setTheme} placeholder="Opcional"/>
         </div>
       </Card>
-
       {cellMembers.length>0&&(
         <>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -651,7 +661,6 @@ function AttendancePanel({ session, showToast }) {
           <Btn full onClick={save} disabled={saving} icon="check" style={{marginTop:12}}>{saving?"Salvando...":"Salvar Presença"}</Btn>
         </>
       )}
-
       {recentDates.length>0&&(
         <div style={{marginTop:24}}>
           <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>Histórico Recente</h3>
@@ -659,7 +668,8 @@ function AttendancePanel({ session, showToast }) {
             const items=grouped[d]; const p=items.filter(i=>i.status==="Presente").length
             return (
               <div key={d} style={{background:"#f8fafc",borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1.5px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div><div style={{fontSize:13,fontWeight:700,color:"#334155"}}>{fmtDate(d)}</div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#334155"}}>{fmtDate(d)}</div>
                   {items[0]?.theme&&<div style={{fontSize:11,color:"#94a3b8"}}>{items[0].theme}</div>}
                 </div>
                 <div style={{display:"flex",gap:6}}>
@@ -675,23 +685,19 @@ function AttendancePanel({ session, showToast }) {
   )
 }
 
-// ─── REPORTS PANEL ────────────────────────────────────────────────────────────
 function ReportsPanel() {
   const { data:members } = useTable("members")
   const { data:cells } = useTable("cells")
   const { data:attendance } = useTable("attendance")
-
   const Bar = ({value,max,color}) => (
     <div style={{height:8,background:"#f1f5f9",borderRadius:4,overflow:"hidden",flex:1}}>
       <div style={{height:"100%",width:`${max?Math.round(value/max*100):0}%`,background:color,borderRadius:4}}/>
     </div>
   )
-
   const genderData = members.reduce((a,m)=>{a[m.gender||"N/I"]=(a[m.gender||"N/I"]||0)+1;return a},{})
   const statusData = members.reduce((a,m)=>{a[m.status||"N/I"]=(a[m.status||"N/I"]||0)+1;return a},{})
   const cellData = cells.map(c=>({name:c.name,count:members.filter(m=>m.cell_id===c.id).length})).sort((a,b)=>b.count-a.count)
   const baptized = members.filter(m=>m.baptism_date).length
-
   const attByMember = {}
   attendance.forEach(a=>{
     if(!attByMember[a.member_id]) attByMember[a.member_id]={name:a.member_name,total:0,present:0}
@@ -699,7 +705,6 @@ function ReportsPanel() {
     if(a.status==="Presente") attByMember[a.member_id].present++
   })
   const attList = Object.values(attByMember).sort((a,b)=>(b.present/b.total||0)-(a.present/a.total||0)).slice(0,15)
-
   return (
     <div>
       <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Relatórios</h2>
@@ -709,11 +714,7 @@ function ReportsPanel() {
         <Stat label="Células" value={cells.length} color="#059669" icon="grid"/>
         <Stat label="Encontros" value={[...new Set(attendance.map(a=>a.date))].length} color="#7c3aed" icon="calendar"/>
       </div>
-
-      {[
-        {title:"Por Sexo",data:genderData,color:"#2563eb"},
-        {title:"Por Status",data:statusData,color:"#059669"}
-      ].map(({title,data,color})=>(
+      {[{title:"Por Sexo",data:genderData,color:"#2563eb"},{title:"Por Status",data:statusData,color:"#059669"}].map(({title,data,color})=>(
         <Card key={title} style={{marginBottom:12}}>
           <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>{title}</h3>
           {Object.entries(data).map(([k,v])=>(
@@ -725,7 +726,6 @@ function ReportsPanel() {
           ))}
         </Card>
       ))}
-
       <Card style={{marginBottom:12}}>
         <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Membros por Célula</h3>
         {cellData.map(({name,count})=>(
@@ -737,7 +737,6 @@ function ReportsPanel() {
         ))}
         {cellData.length===0&&<p style={{color:"#94a3b8",fontSize:13,margin:0}}>Sem dados</p>}
       </Card>
-
       {attList.length>0&&(
         <Card>
           <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Frequência Individual</h3>
@@ -765,16 +764,13 @@ function ReportsPanel() {
   )
 }
 
-// ─── NOTIFICATIONS PANEL ──────────────────────────────────────────────────────
 function NotificationsPanel({ session, showToast }) {
   const { data:cells } = useTable("cells")
   const { data:members } = useTable("members")
   const { data:notifs } = useTable("notifications")
   const [form, setForm] = useState({title:"",message:"",target:"all",cell_id:"",channels:{sms:false,whatsapp:true,email:false}})
   const f = k => v => setForm(p=>({...p,[k]:v}))
-
   const hist = notifs.filter(n=>n.type==="notification")
-
   async function send() {
     if (!form.title||!form.message) { showToast("Título e mensagem obrigatórios","error"); return }
     const channels = Object.entries(form.channels).filter(([,v])=>v).map(([k])=>k.toUpperCase())
@@ -785,7 +781,6 @@ function NotificationsPanel({ session, showToast }) {
     showToast(`Notificação enviada para ${targets.length} membros!`)
     setForm(p=>({...p,title:"",message:""}))
   }
-
   return (
     <div>
       <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Enviar Notificações</h2>
@@ -809,7 +804,6 @@ function NotificationsPanel({ session, showToast }) {
         </div>
         <Btn full icon="send" onClick={send}>Enviar</Btn>
       </Card>
-
       <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>Histórico</h3>
       {hist.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhuma notificação enviada</p></Card>}
       {hist.map(n=>(
@@ -829,19 +823,16 @@ function NotificationsPanel({ session, showToast }) {
   )
 }
 
-// ─── REQUESTS PANEL ───────────────────────────────────────────────────────────
 function RequestsPanel({ session, showToast }) {
   const { data:requests } = useTable("notifications")
   const reqs = requests.filter(n=>n.type==="request")
   const sc = {pending:"#d97706",approved:"#059669",rejected:"#dc2626"}
   const sl = {pending:"Pendente",approved:"Aprovado",rejected:"Rejeitado"}
-
   async function resolve(id, status) {
     await supabase.from("notifications").update({status,resolved_by:session.id,resolved_at:new Date().toISOString()}).eq("id",id)
     await addLog(session,"update",`Solicitação ${status==="approved"?"aprovada":"rejeitada"}`)
     showToast(status==="approved"?"Aprovado!":"Rejeitado")
   }
-
   return (
     <div>
       <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Solicitações</h2>
@@ -853,7 +844,7 @@ function RequestsPanel({ session, showToast }) {
             <Badge label={sl[r.status]||r.status} color={sc[r.status]||"#64748b"}/>
           </div>
           <p style={{fontSize:12,color:"#64748b",margin:"0 0 8px"}}>{r.message}</p>
-          <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>De: {r.from_name||"—"} • {fmtDate(r.sent_at?.split("T")[0])}</div>
+          <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>{fmtDate(r.sent_at?.split("T")[0])}</div>
           {r.status==="pending"&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <Btn variant="success" size="sm" onClick={()=>resolve(r.id,"approved")}>✓ Aprovar</Btn>
@@ -866,7 +857,6 @@ function RequestsPanel({ session, showToast }) {
   )
 }
 
-// ─── LOGS PANEL ───────────────────────────────────────────────────────────────
 function LogsPanel() {
   const { data:logs, loading } = useTable("logs")
   const emoji = {create:"➕",update:"✏️",delete:"🗑️"}
@@ -888,7 +878,6 @@ function LogsPanel() {
   )
 }
 
-// ─── SECRETARY DASHBOARD ──────────────────────────────────────────────────────
 function SecretaryDashboard({ session, logout, showToast }) {
   const [sub, setSub] = useState("home")
   const { data:cells } = useTable("cells")
@@ -898,17 +887,15 @@ function SecretaryDashboard({ session, logout, showToast }) {
   const cellMembers = members.filter(m=>m.cell_id===session.cell_id)
   const lastDate = [...new Set(attendance.filter(a=>a.cell_id===session.cell_id).map(a=>a.date))].sort().reverse()[0]
   const presentCount = attendance.filter(a=>a.date===lastDate&&a.status==="Presente"&&a.cell_id===session.cell_id).length
-
   const menu = [
     {id:"members",icon:"users",label:"Membros",desc:"Gerenciar cadastros",color:"#059669"},
     {id:"attendance",icon:"check-circle",label:"Presença",desc:"Registrar reunião",color:"#2563eb"},
     {id:"reports",icon:"bar-chart",label:"Relatórios",desc:"Frequência e dados",color:"#d97706"},
     {id:"notifications",icon:"send",label:"Avisos",desc:"Enviar comunicados",color:"#7c3aed"},
   ]
-
   return (
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-      <Header title={cell?.name||"Minha Célula"} subtitle={`${cell?.neighborhood||""} • ${cell?.day||""} • Secretário`} logout={logout}/>
+      <Header title={cell?.name||"Minha Célula"} subtitle={`Secretário`} logout={logout}/>
       {sub==="home"?(
         <div style={{flex:1,padding:"16px 16px 80px"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
@@ -942,7 +929,6 @@ function SecretaryDashboard({ session, logout, showToast }) {
   )
 }
 
-// ─── LEADER DASHBOARD ─────────────────────────────────────────────────────────
 function LeaderDashboard({ session, logout, showToast }) {
   const [sub, setSub] = useState("home")
   const { data:cells } = useTable("cells")
@@ -953,13 +939,11 @@ function LeaderDashboard({ session, logout, showToast }) {
   const cellAtt = attendance.filter(a=>a.cell_id===session.cell_id)
   const attByM = {}
   cellAtt.forEach(a=>{if(!attByM[a.member_id])attByM[a.member_id]={name:a.member_name,total:0,present:0};attByM[a.member_id].total++;if(a.status==="Presente")attByM[a.member_id].present++})
-
   const menu = [
     {id:"members",icon:"users",label:"Membros",desc:"Ver todos",color:"#2563eb"},
     {id:"frequency",icon:"bar-chart",label:"Frequência",desc:"Relatórios",color:"#059669"},
     {id:"notifications",icon:"send",label:"Avisos",desc:"Enviar comunicados",color:"#7c3aed"},
   ]
-
   return (
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <Header title={cell?.name||"Minha Célula"} subtitle="Líder" logout={logout}/>
@@ -1030,12 +1014,10 @@ function LeaderDashboard({ session, logout, showToast }) {
   )
 }
 
-// ─── SUPERVISOR DASHBOARD ─────────────────────────────────────────────────────
 function SupervisorDashboard({ session, logout, showToast }) {
   const { data:cells } = useTable("cells")
   const { data:members } = useTable("members")
   const supervised = cells.filter(c=>c.supervisor_id===session.member_id||c.supervisor_id===session.id)
-
   return (
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <Header title="Supervisor" subtitle={session.name} logout={logout}/>
@@ -1065,17 +1047,14 @@ function SupervisorDashboard({ session, logout, showToast }) {
   )
 }
 
-// ─── MEMBER PORTAL ────────────────────────────────────────────────────────────
 function MemberPortal({ session, logout }) {
   const { data:cells } = useTable("cells")
   const { data:members } = useTable("members")
   const { data:attendance } = useTable("attendance")
-
   const member = members.find(m=>m.id===session.member_id)
   const cell = member ? cells.find(c=>c.id===member.cell_id) : null
   const myAtt = attendance.filter(a=>a.member_id===session.member_id).sort((a,b)=>b.date.localeCompare(a.date))
   const pct = myAtt.length ? Math.round(myAtt.filter(a=>a.status==="Presente").length/myAtt.length*100) : 0
-
   return (
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <div style={{background:"linear-gradient(135deg,#0f172a,#1e3a5f)",padding:"28px 18px 24px"}}>
@@ -1131,9 +1110,4 @@ function MemberPortal({ session, logout }) {
       </div>
     </div>
   )
-}
-
-// ─── UTILS ────────────────────────────────────────────────────────────────────
-async function addLog(session, action, detail) {
-  await supabase.from("logs").insert({action,detail,user_id:session?.id})
 }
