@@ -208,7 +208,8 @@ async function handleLogin(e) {
         <form onSubmit={handleLogin}>
           <div style={{marginBottom:16}}>
             <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7dd3fc",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>CPF</label>
-            <input value={cpf} onChange={e=>setCpf(fmtCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} required style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 16px",fontSize:15,color:"#f0f9ff",outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
+            value={cpf} onChange={e=>setCpf(e.target.value.replace(/\D/g,""))}
+ placeholder="000.000.000-00" maxLength={14} required style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 16px",fontSize:15,color:"#f0f9ff",outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
           </div>
           <div style={{marginBottom:8,position:"relative"}}>
             <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7dd3fc",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Senha</label>
