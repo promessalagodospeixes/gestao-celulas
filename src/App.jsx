@@ -620,7 +620,14 @@ function MembersPanel({session,showToast}){
     showToast(isActive?"Membro inativado!":"Membro reativado!")
   }
 
-  const filtered=members.filter(m=>m.name.toLowerCase().includes(search.toLowerCase())||(m.phone||"").includes(search))
+  const[filterStatus,setFilterStatus]=useState("")
+  const[filterCell,setFilterCell]=useState("")
+  const filtered=members.filter(m=>{
+    const matchSearch=m.name.toLowerCase().includes(search.toLowerCase())||(m.phone||"").includes(search)
+    const matchStatus=!filterStatus||m.status===filterStatus
+    const matchCell=!filterCell||(filterCell==="sem_celula"?!m.cell_id:m.cell_id===filterCell)
+    return matchSearch&&matchStatus&&matchCell
+  })
   const cOpts=[{value:"",label:"— Sem célula —"},...cells.map(c=>({value:c.id,label:c.name}))]
 
   return(
@@ -629,9 +636,21 @@ function MembersPanel({session,showToast}){
         <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Membros <span style={{fontSize:13,color:"#94a3b8",fontWeight:600}}>({members.filter(m=>m.status==="Membro").length} membros, {members.filter(m=>m.status==="Visitante").length} visitantes)</span></h2>
         <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Novo</Btn>
       </div>
-      <div style={{position:"relative",marginBottom:12}}>
+      <div style={{position:"relative",marginBottom:8}}>
         <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",pointerEvents:"none"}}><Icon name="search" size={15}/></div>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nome ou telefone..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px 10px 36px",fontSize:14,outline:"none"}}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:13,fontFamily:"'Outfit',sans-serif",outline:"none",background:"#fff",color:"#334155"}}>
+          <option value="">Todos os status</option>
+          <option value="Membro">Membros</option>
+          <option value="Visitante">Visitantes</option>
+        </select>
+        <select value={filterCell} onChange={e=>setFilterCell(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:13,fontFamily:"'Outfit',sans-serif",outline:"none",background:"#fff",color:"#334155"}}>
+          <option value="">Todas as células</option>
+          {cells.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="sem_celula">Sem célula</option>
+        </select>
       </div>
       {loading&&<Loader/>}
       {!loading&&filtered.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhum encontrado</p></Card>}
@@ -750,10 +769,12 @@ function AttendancePanel({session,showToast}){
   const[saving,setSaving]=useState(false)
   const[commentsModal,setCommentsModal]=useState(null)
   const[preacherSearch,setPreacherSearch]=useState(false)
+  const[editModal,setEditModal]=useState(null)
 
-  const cellMembers=members.filter(m=>m.cell_id===cellId&&m.status==="Membro")
+  const cellMembers=members.filter(m=>m.cell_id===cellId&&(m.status==="Membro"||m.status==="Visitante"))
+  const cellMembersOnly=members.filter(m=>m.cell_id===cellId&&m.status==="Membro")
   const presentCount=Object.values(marks).filter(v=>v==="Presente").length
-  const pct=cellMembers.length?Math.round(presentCount/cellMembers.length*100):0
+  const pct=cellMembersOnly.length?Math.round(cellMembersOnly.filter(m=>marks[m.id]==="Presente").length/cellMembersOnly.length*100):0
 
   async function save(){
     if(!cellId||!date){showToast("Selecione célula e data","error");return}
@@ -844,6 +865,7 @@ function AttendancePanel({session,showToast}){
                     <div style={{display:"flex",gap:4}}><Badge label={`✓ ${p}`} color="#059669"/><Badge label={`✗ ${items.length-p}`} color="#dc2626"/></div>
                     {item?.photos_link&&<a href={item.photos_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#2563eb",fontWeight:600,display:"flex",alignItems:"center",gap:3,textDecoration:"none"}}><Icon name="link" size={11}/>Fotos</a>}
                     <button onClick={()=>setCommentsModal({date:d,cellId})} style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:"#059669",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="comment" size={11}/>Comentários</button>
+                    <button onClick={()=>setEditModal({date:d,cellId,items:grouped[d]})} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:"#2563eb",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="edit" size={11}/>Editar</button>
                   </div>
                 </div>
               </Card>
@@ -854,7 +876,53 @@ function AttendancePanel({session,showToast}){
 
       <MemberSearchModal open={preacherSearch} title="Quem passou a Palavra?" members={members.filter(m=>m.cell_id===cellId||!cellId)} onSelect={m=>setPreacher(m.name)} onClose={()=>setPreacherSearch(false)}/>
       {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cellId} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
+      {editModal&&<EditAttendanceModal date={editModal.date} cellId={editModal.cellId} items={editModal.items} showToast={showToast} onClose={()=>setEditModal(null)}/>}
     </div>
+  )
+}
+
+function EditAttendanceModal({date,cellId,items,showToast,onClose}){
+  const[marks,setMarks]=useState(()=>{
+    const m={}
+    items.forEach(i=>{m[i.member_id]={status:i.status,id:i.id,name:i.member_name}})
+    return m
+  })
+  const[saving,setSaving]=useState(false)
+
+  async function save(){
+    setSaving(true)
+    for(const[memberId,data] of Object.entries(marks)){
+      await supabase.from("attendance").update({status:data.status}).eq("id",data.id)
+    }
+    showToast("Presença atualizada!")
+    setSaving(false)
+    onClose()
+  }
+
+  return(
+    <Modal open title={`Editar Presença • ${fmtDate(date)}`} onClose={onClose}>
+      <p style={{fontSize:12,color:"#64748b",marginBottom:14}}>Corrija a presença dos membros abaixo:</p>
+      {Object.entries(marks).map(([memberId,data])=>(
+        <div key={memberId} style={{marginBottom:12}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:6}}>{data.name}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+            {["Presente","Ausente","Justificado"].map(v=>(
+              <button key={v} onClick={()=>setMarks(p=>({...p,[memberId]:{...p[memberId],status:v}}))}
+                style={{padding:"8px 4px",borderRadius:8,fontSize:12,fontWeight:700,
+                  border:`1.5px solid ${data.status===v?(v==="Presente"?"#059669":v==="Ausente"?"#dc2626":"#d97706"):"#e2e8f0"}`,
+                  background:data.status===v?(v==="Presente"?"#dcfce7":v==="Ausente"?"#fee2e2":"#fef3c7"):"#f8fafc",
+                  color:data.status===v?(v==="Presente"?"#166534":v==="Ausente"?"#991b1b":"#92400e"):"#64748b",
+                  cursor:"pointer"}}>
+                {v==="Presente"?"✓ Presente":v==="Ausente"?"✗ Ausente":"? Justif."}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <Btn full onClick={save} disabled={saving} icon="check" style={{marginTop:8}}>
+        {saving?"Salvando...":"Salvar Alterações"}
+      </Btn>
+    </Modal>
   )
 }
 
