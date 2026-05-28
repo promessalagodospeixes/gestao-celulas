@@ -1,22 +1,40 @@
 import { useState, useEffect, useCallback } from "react"
 import { supabase } from "./supabase.js"
 
+// ─── CONSTANTES ───────────────────────────────────────────────────────────────
 const ROLES = { admin:"Gestor", supervisor:"Supervisor", leader:"Líder", secretary:"Secretário", member:"Membro" }
-const ROLE_COLORS = { admin:"#1e40af", supervisor:"#7c3aed", leader:"#059669", secretary:"#d97706", member:"#64748b" }
+const ROLE_COLORS = { admin:"#1B4F8A", supervisor:"#7c3aed", leader:"#059669", secretary:"#E8921A", member:"#64748b" }
 const DAYS = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"]
 const STATUS_LIST = ["Visitante","Membro"]
-const CELL_FUNCTIONS = ["Líder","Secretário","Líder em Treinamento","Anfitrião"]
+const CELL_TYPES = ["Adultos","Jovens","Kids/Infantil","Casais","Homens","Mulheres"]
+const CELL_STATUS = ["Ativa","Inativa","Multiplicada"]
 const FREQUENCIES = ["Semanal","Quinzenal","Mensal"]
 const REACTIONS = ["🙏","❤️","🔥","✝️","😭","🙌"]
+
+// Cores da Promessa
+const C = {
+  primary: "#1B4F8A",
+  gold: "#E8921A",
+  dark: "#0f172a",
+  darker: "#162035",
+  light: "#f0f4f8",
+  white: "#ffffff",
+  success: "#059669",
+  danger: "#dc2626",
+  warning: "#d97706",
+  purple: "#7c3aed",
+}
 
 function fmtDate(d){if(!d)return"—";try{const[y,m,day]=d.split("-");return`${day}/${m}/${y}`}catch{return d}}
 function calcAge(dob){if(!dob)return null;const b=new Date(dob),n=new Date();let a=n.getFullYear()-b.getFullYear();if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))a--;return a}
 function fmtCPF(v){const d=v.replace(/\D/g,"");if(d.length>9)return d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6,9)+"-"+d.slice(9,11);if(d.length>6)return d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6);if(d.length>3)return d.slice(0,3)+"."+d.slice(3);return d}
+function fmtPhone(v){const d=v.replace(/\D/g,"");if(d.length>10)return`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}`;if(d.length>6)return`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;if(d.length>2)return`(${d.slice(0,2)}) ${d.slice(2)}`;return d}
 function todayStr(){return new Date().toISOString().split("T")[0]}
 function btoa64(s){return btoa(unescape(encodeURIComponent(s)))}
 function atob64(s){try{return decodeURIComponent(escape(atob(s)))}catch{return s}}
 function getMonthBirthday(dob){if(!dob)return null;return parseInt(dob.split("-")[1])}
 function getCurrentMonth(){return new Date().getMonth()+1}
+function getCurrentWeekDates(){const n=new Date();const day=n.getDay();const mon=new Date(n);mon.setDate(n.getDate()-(day===0?6:day-1));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return{start:mon,end:sun}}
 function getNextMeetingDate(day){
   const dayMap={"Segunda":1,"Terça":2,"Quarta":3,"Quinta":4,"Sexta":5,"Sábado":6,"Domingo":0}
   const target=dayMap[day]??3
@@ -26,10 +44,26 @@ function getNextMeetingDate(day){
   next.setDate(today.getDate()+(diff===0?7:diff))
   return next.toISOString().split("T")[0]
 }
+function whatsappLink(phone,name=""){
+  const n=phone?.replace(/\D/g,"");
+  if(!n)return null;
+  const num=n.startsWith("55")?n:`55${n}`;
+  return `https://wa.me/${num}`
+}
 
-const Icon=({name,size=18})=>(
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-    {name==="church"&&<><path d="M12 2v5M9.5 4.5h5M5 10h14M5 10v10h5v-5h4v5h5V10M12 7v3"/></>}
+// ─── LOGO SVG ─────────────────────────────────────────────────────────────────
+const LogoIcon = ({size=40}) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="50" fill="white" fillOpacity="0.15"/>
+    <path d="M35 75 C35 75 25 60 28 45 C30 35 38 28 42 35 C44 40 40 48 44 52 C46 54 50 50 50 50 C50 50 48 62 42 68 C40 70 38 73 35 75Z" fill="white"/>
+    <path d="M50 75 C50 75 58 65 60 55 C62 47 58 38 62 33 C65 29 72 32 73 40 C75 52 68 65 62 72 C59 75 55 77 50 75Z" fill="white" fillOpacity="0.7"/>
+    <path d="M44 38 C44 38 46 32 50 30 C52 29 54 31 52 35 C51 37 48 38 44 38Z" fill="white" fillOpacity="0.5"/>
+  </svg>
+)
+
+// ─── ICONS ────────────────────────────────────────────────────────────────────
+const Icon=({name,size=18,color="currentColor"})=>(
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
     {name==="users"&&<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>}
     {name==="check-circle"&&<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>}
     {name==="bar-chart"&&<><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>}
@@ -60,138 +94,227 @@ const Icon=({name,size=18})=>(
     {name==="play"&&<><polygon points="5 3 19 12 5 21 5 3"/></>}
     {name==="link"&&<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>}
     {name==="comment"&&<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>}
+    {name==="pray"&&<><path d="M12 2C12 2 8 6 8 10c0 2.21 1.79 4 4 4s4-1.79 4-4c0-4-4-8-4-8z"/><path d="M8 18c0 2.21 1.79 4 4 4s4-1.79 4-4v-4H8v4z"/></>}
+    {name==="whatsapp"&&<><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></>}
     {name==="repeat"&&<><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></>}
-    {name==="edit2"&&<><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>}
+    {name==="chevron-right"&&<polyline points="9 18 15 12 9 6"/>}
+    {name==="chevron-down"&&<polyline points="6 9 12 15 18 9"/>}
+    {name==="flame"&&<><path d="M12 2c0 0-4 4-4 8a4 4 0 0 0 8 0c0-4-4-8-4-8z"/><path d="M12 12c0 0-2 2-2 4a2 2 0 0 0 4 0c0-2-2-4-2-4z"/></>}
+    {name==="star"&&<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>}
+    {name==="copy"&&<><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>}
+    {name==="user-plus"&&<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></>}
+    {name==="meeting"&&<><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 2v4M16 2v4"/><circle cx="8" cy="15" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="16" cy="15" r="1"/></>}
+    {name==="church"&&<><path d="M12 2v5M9.5 4.5h5M5 10h14M5 10v10h5v-5h4v5h5V10M12 7v3"/></>}
+    {name==="bell"&&<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>}
   </svg>
 )
 
-const Avatar=({name,photo,size=36,color="#1e40af"})=>{
-  if(photo)return<img src={photo} alt={name} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",flexShrink:0,border:`2px solid ${color}30`}}/>
+// ─── UI COMPONENTS ────────────────────────────────────────────────────────────
+const Avatar=({name,photo,size=36,color=C.primary})=>{
+  if(photo)return<img src={photo} alt={name} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",flexShrink:0,border:`2px solid ${color}40`}}/>
   const initials=name?name.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase():"?"
-  return<div style={{width:size,height:size,borderRadius:"50%",background:color+"20",border:`2px solid ${color}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.35,fontWeight:800,color,flexShrink:0}}>{initials}</div>
+  return<div style={{width:size,height:size,borderRadius:"50%",background:color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.38,fontWeight:800,color:"#fff",flexShrink:0}}>{initials}</div>
 }
-const Badge=({label,color="#1e40af"})=>(<span style={{background:color+"18",color,fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,whiteSpace:"nowrap"}}>{label}</span>)
+
+const Badge=({label,color=C.primary,bg})=>(
+  <span style={{background:bg||color+"18",color,fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",border:`1px solid ${color}30`}}>{label}</span>
+)
+
 const Btn=({children,onClick,variant="primary",size="md",full=false,disabled=false,icon=null,style:extra={}})=>{
-  const variants={primary:{background:"#1e40af",color:"#fff",border:"none"},secondary:{background:"#f1f5f9",color:"#334155",border:"none"},danger:{background:"#fee2e2",color:"#991b1b",border:"none"},success:{background:"#dcfce7",color:"#166534",border:"none"},ghost:{background:"transparent",color:"#64748b",border:"1.5px solid #e2e8f0"},warning:{background:"#fef3c7",color:"#92400e",border:"none"}}
+  const variants={
+    primary:{background:`linear-gradient(135deg,${C.primary},#1a5fa8)`,color:"#fff",border:"none",boxShadow:"0 2px 8px rgba(27,79,138,0.3)"},
+    gold:{background:`linear-gradient(135deg,${C.gold},#d4820f)`,color:"#fff",border:"none",boxShadow:"0 2px 8px rgba(232,146,26,0.3)"},
+    secondary:{background:"#f1f5f9",color:"#334155",border:"none"},
+    danger:{background:"#fee2e2",color:"#991b1b",border:"none"},
+    success:{background:"#dcfce7",color:"#166534",border:"none"},
+    ghost:{background:"transparent",color:"#64748b",border:"1.5px solid #e2e8f0"},
+    warning:{background:"#fef3c7",color:"#92400e",border:"none"},
+    dark:{background:C.dark,color:"#fff",border:"none"},
+  }
   return<button disabled={disabled} onClick={onClick} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,borderRadius:12,fontWeight:700,cursor:disabled?"not-allowed":"pointer",fontFamily:"'Outfit',sans-serif",transition:"all 0.15s",opacity:disabled?0.5:1,width:full?"100%":"auto",fontSize:size==="sm"?13:15,padding:size==="sm"?"8px 14px":"12px 20px",...variants[variant],...extra}}>{icon&&<Icon name={icon} size={size==="sm"?14:16}/>}{children}</button>
 }
-const Inp=({label,value,onChange,type="text",placeholder="",required=false,readOnly=false})=>(
+
+const Inp=({label,value,onChange,type="text",placeholder="",required=false,readOnly=false,hint=""})=>(
   <div style={{marginBottom:14}}>
     {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</label>}
-    <input type={type} value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} required={required} readOnly={readOnly} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:"'Outfit',sans-serif",background:readOnly?"#f8fafc":"#fff",color:"#1e293b",outline:"none",boxSizing:"border-box"}}/>
+    <input type={type} value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} required={required} readOnly={readOnly}
+      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:"'Outfit',sans-serif",background:readOnly?"#f8fafc":"#fff",color:"#1e293b",outline:"none",boxSizing:"border-box",transition:"border-color 0.15s"}}
+      onFocus={e=>e.target.style.borderColor=C.primary} onBlur={e=>e.target.style.borderColor="#e2e8f0"}/>
+    {hint&&<p style={{fontSize:11,color:"#94a3b8",marginTop:4,marginBottom:0}}>{hint}</p>}
   </div>
 )
+
 const Sel=({label,value,onChange,options,required=false})=>(
   <div style={{marginBottom:14}}>
     {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</label>}
-    <select value={value||""} onChange={e=>onChange(e.target.value)} required={required} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:"'Outfit',sans-serif",background:"#fff",color:"#1e293b",outline:"none"}}>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>
+    <select value={value||""} onChange={e=>onChange(e.target.value)} required={required}
+      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:"'Outfit',sans-serif",background:"#fff",color:"#1e293b",outline:"none"}}>
+      {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
   </div>
 )
+
 const Textarea=({label,value,onChange,placeholder="",rows=3})=>(
   <div style={{marginBottom:14}}>
     {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}</label>}
-    <textarea value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:"'Outfit',sans-serif",background:"#fff",color:"#1e293b",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+    <textarea value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows}
+      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:"'Outfit',sans-serif",background:"#fff",color:"#1e293b",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
   </div>
 )
-const Card=({children,style:extra={}})=>(<div style={{background:"#fff",borderRadius:16,border:"1.5px solid #f1f5f9",padding:"16px",boxShadow:"0 1px 4px rgba(0,0,0,0.04)",...extra}}>{children}</div>)
+
+const Card=({children,style:extra={}})=>(
+  <div style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",padding:"16px",boxShadow:"0 1px 6px rgba(0,0,0,0.06)",...extra}}>{children}</div>
+)
+
 const Modal=({open,onClose,title,children})=>{
   if(!open)return null
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
-      <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 18px 14px",borderBottom:"1.5px solid #f1f5f9",flexShrink:0}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.65)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+      <div style={{background:"#fff",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 32px rgba(0,0,0,0.15)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 20px 14px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
           <h3 style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>{title}</h3>
-          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:6,cursor:"pointer",display:"flex",color:"#64748b"}}><Icon name="x" size={16}/></button>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:7,cursor:"pointer",display:"flex",color:"#64748b"}}><Icon name="x" size={15}/></button>
         </div>
-        <div style={{overflowY:"auto",padding:"16px 18px 28px",flex:1}}>{children}</div>
+        <div style={{overflowY:"auto",padding:"16px 20px 32px",flex:1}}>{children}</div>
       </div>
     </div>
   )
 }
+
 const Toast=({msg,type="success"})=>{
   if(!msg)return null
-  const colors={success:["#dcfce7","#166534"],error:["#fee2e2","#991b1b"],info:["#dbeafe","#1e40af"]}
+  const colors={success:["#dcfce7","#166534"],error:["#fee2e2","#991b1b"],info:["#dbeafe",C.primary],warning:["#fef3c7","#92400e"]}
   const[bg,color]=colors[type]||colors.info
-  return<div style={{position:"fixed",bottom:24,left:16,right:16,background:bg,color,borderRadius:12,padding:"12px 16px",fontWeight:700,fontSize:14,zIndex:9999,textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.12)"}}>{msg}</div>
-}
-const Stat=({label,value,color="#1e40af",icon})=>(
-  <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #f1f5f9",padding:"14px",textAlign:"center",flex:1}}>
-    {icon&&<div style={{background:color+"15",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px",color}}><Icon name={icon} size={18}/></div>}
-    <div style={{fontSize:26,fontWeight:900,color,lineHeight:1}}>{value}</div>
-    <div style={{fontSize:11,color:"#94a3b8",marginTop:4,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>{label}</div>
-  </div>
-)
-const Loader=()=>(<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"48px 0",flexDirection:"column",gap:12}}><div style={{width:32,height:32,border:"3px solid #e2e8f0",borderTopColor:"#1e40af",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/><span style={{color:"#94a3b8",fontSize:13,fontWeight:600}}>Carregando...</span></div>)
-const ProgressBar=({value,max,color="#1e40af"})=>{
-  const pct=max>0?Math.min(Math.round(value/max*100),100):0
-  return(<div><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:"#64748b",fontWeight:600}}>{value} de {max}</span><span style={{fontSize:12,fontWeight:800,color}}>{pct}%</span></div><div style={{height:8,background:"#f1f5f9",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:4,transition:"width 0.5s"}}/></div></div>)
+  return<div style={{position:"fixed",bottom:24,left:16,right:16,background:bg,color,borderRadius:14,padding:"13px 18px",fontWeight:700,fontSize:14,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,0.15)",maxWidth:440,margin:"0 auto"}}>{msg}</div>
 }
 
+const Stat=({label,value,color=C.primary,icon,sub})=>(
+  <div style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",padding:"16px 14px",textAlign:"center",flex:1,boxShadow:"0 1px 6px rgba(0,0,0,0.05)"}}>
+    {icon&&<div style={{background:color+"15",borderRadius:12,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px",color}}><Icon name={icon} size={20}/></div>}
+    <div style={{fontSize:28,fontWeight:900,color,lineHeight:1}}>{value}</div>
+    <div style={{fontSize:11,color:"#94a3b8",marginTop:4,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>{label}</div>
+    {sub&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>{sub}</div>}
+  </div>
+)
+
+const Loader=()=>(
+  <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"48px 0",flexDirection:"column",gap:12}}>
+    <div style={{width:32,height:32,border:`3px solid ${C.primary}30`,borderTopColor:C.primary,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+    <span style={{color:"#94a3b8",fontSize:13,fontWeight:600}}>Carregando...</span>
+  </div>
+)
+
+const ProgressBar=({value,max,color=C.primary,showLabel=true})=>{
+  const pct=max>0?Math.min(Math.round(value/max*100),100):0
+  return(
+    <div>
+      {showLabel&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+        <span style={{fontSize:12,color:"#64748b",fontWeight:600}}>{value} de {max} membros</span>
+        <span style={{fontSize:12,fontWeight:800,color}}>{pct}%</span>
+      </div>}
+      <div style={{height:8,background:"#f1f5f9",borderRadius:4,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${color},${color}dd)`,borderRadius:4,transition:"width 0.6s ease"}}/>
+      </div>
+    </div>
+  )
+}
+
+const WppBtn=({phone,name})=>{
+  const link=whatsappLink(phone,name)
+  if(!link)return null
+  return(
+    <a href={link} target="_blank" rel="noopener noreferrer"
+      style={{display:"inline-flex",alignItems:"center",gap:5,background:"#dcfce7",color:"#166534",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,textDecoration:"none",border:"1px solid #bbf7d0"}}>
+      <Icon name="whatsapp" size={13}/>
+      {phone}
+    </a>
+  )
+}
+
+// ─── LGPD ─────────────────────────────────────────────────────────────────────
 function LGPDModal({onAccept}){
   const[c1,setC1]=useState(false)
   const[c2,setC2]=useState(false)
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.85)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:460,maxHeight:"90vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-        <div style={{background:"#1e40af",padding:"20px 20px 16px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-            <div style={{background:"rgba(255,255,255,0.2)",borderRadius:10,padding:8,display:"flex",color:"#fff"}}><Icon name="shield" size={20}/></div>
-            <h2 style={{color:"#fff",fontSize:18,fontWeight:900,margin:0}}>Termos e Privacidade</h2>
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.9)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:460,maxHeight:"90vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{background:`linear-gradient(135deg,${C.primary},#162d5a)`,padding:"24px 24px 20px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:12,padding:10,display:"flex"}}><Icon name="shield" size={22} color="#fff"/></div>
+            <h2 style={{color:"#fff",fontSize:19,fontWeight:900,margin:0}}>Termos e Privacidade</h2>
           </div>
-          <p style={{color:"#bfdbfe",fontSize:13,margin:0}}>Leia e aceite para continuar</p>
+          <p style={{color:"#bfdbfe",fontSize:13,margin:0}}>Leia e aceite para continuar usando o sistema</p>
         </div>
         <div style={{overflowY:"auto",padding:"20px",flex:1}}>
-          <div style={{background:"#f8fafc",borderRadius:12,padding:16,marginBottom:16,border:"1.5px solid #e2e8f0"}}>
+          <div style={{background:"#f8fafc",borderRadius:14,padding:16,marginBottom:14,border:"1px solid #e2e8f0"}}>
             <p style={{fontSize:13,fontWeight:800,color:"#0f172a",marginBottom:8}}>📋 Política de Dados — LGPD</p>
-            <p style={{fontSize:13,color:"#475569",lineHeight:1.6,margin:0}}>Coletamos seus dados pessoais (nome, CPF, telefone, e-mail, endereço e informações familiares) para organizar e gerenciar as células da nossa igreja. Seus dados são usados exclusivamente para fins administrativos internos. Apenas gestores, líderes, secretários e supervisores autorizados têm acesso. Você pode solicitar a correção ou exclusão dos seus dados a qualquer momento falando com o líder da sua célula.</p>
+            <p style={{fontSize:13,color:"#475569",lineHeight:1.65,margin:0}}>Coletamos seus dados pessoais (nome, CPF, telefone, e-mail, endereço e informações familiares) para organizar e gerenciar as células da nossa igreja. Seus dados são usados exclusivamente para fins administrativos internos. Apenas gestores, líderes, secretários e supervisores autorizados têm acesso. Você pode solicitar a correção ou exclusão dos seus dados a qualquer momento falando com o líder da sua célula.</p>
           </div>
-          <div style={{background:"#f8fafc",borderRadius:12,padding:16,marginBottom:20,border:"1.5px solid #e2e8f0"}}>
+          <div style={{background:"#f8fafc",borderRadius:14,padding:16,marginBottom:20,border:"1px solid #e2e8f0"}}>
             <p style={{fontSize:13,fontWeight:800,color:"#0f172a",marginBottom:8}}>📸 Uso de Imagem e Vídeo</p>
-            <p style={{fontSize:13,color:"#475569",lineHeight:1.6,margin:0}}>Durante os encontros e eventos da célula, podemos registrar fotos e vídeos. Essas imagens podem ser usadas para comunicação interna entre os membros e também nas redes sociais oficiais da igreja. Caso não queira que sua imagem seja divulgada, informe ao líder da sua célula.</p>
+            <p style={{fontSize:13,color:"#475569",lineHeight:1.65,margin:0}}>Durante os encontros e eventos da célula, podemos registrar fotos e vídeos. Essas imagens podem ser usadas para comunicação interna entre os membros e também nas redes sociais oficiais da igreja. Caso não queira que sua imagem seja divulgada, informe ao líder da sua célula.</p>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {[[c1,setC1,"Li e concordo com a Política de Dados (LGPD) e autorizo o armazenamento dos meus dados pessoais."],[c2,setC2,"Autorizo o uso da minha imagem em fotos e vídeos dos encontros para uso interno e nas redes sociais da igreja."]].map(([checked,setChecked,text],i)=>(
-              <label key={i} style={{display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer",background:checked?"#eff6ff":"#f8fafc",border:`1.5px solid ${checked?"#2563eb":"#e2e8f0"}`,borderRadius:12,padding:14}}>
-                <input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)} style={{marginTop:2,width:16,height:16,flexShrink:0}}/>
-                <span style={{fontSize:13,color:"#334155",fontWeight:600,lineHeight:1.5}}>{text}</span>
+              <label key={i} style={{display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer",background:checked?"#eff6ff":"#f8fafc",border:`1.5px solid ${checked?C.primary:"#e2e8f0"}`,borderRadius:14,padding:14,transition:"all 0.15s"}}>
+                <input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)} style={{marginTop:2,width:18,height:18,flexShrink:0,accentColor:C.primary}}/>
+                <span style={{fontSize:13,color:"#334155",fontWeight:600,lineHeight:1.55}}>{text}</span>
               </label>
             ))}
           </div>
         </div>
-        <div style={{padding:"16px 20px",borderTop:"1.5px solid #f1f5f9"}}>
-          <Btn full disabled={!c1||!c2} onClick={onAccept}>{c1&&c2?"✓ Concordo e quero continuar":"Marque as opções acima para continuar"}</Btn>
+        <div style={{padding:"16px 20px",borderTop:"1px solid #f1f5f9"}}>
+          <Btn full disabled={!c1||!c2} onClick={onAccept} variant={c1&&c2?"gold":"secondary"}>
+            {c1&&c2?"✓ Concordo e quero continuar":"Marque as opções acima para continuar"}
+          </Btn>
         </div>
       </div>
     </div>
   )
 }
 
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App(){
   const[session,setSession]=useState(null)
   const[page,setPage]=useState("login")
   const[toast,setToast]=useState({msg:"",type:"success"})
   const[showLGPD,setShowLGPD]=useState(false)
   const[pendingSession,setPendingSession]=useState(null)
+
   const showToast=useCallback((msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast({msg:"",type:"success"}),3500)},[])
   function doLogout(){setSession(null);setPage("login")}
+
   async function doLogin(user){
     if(user.active===false)return
     if(!user.lgpd_accepted){setPendingSession(user);setShowLGPD(true);return}
     startSession(user)
   }
+
   async function handleLGPDAccept(){
     if(!pendingSession)return
     await supabase.from("users").update({lgpd_accepted:true,lgpd_accepted_at:new Date().toISOString()}).eq("id",pendingSession.id)
     setShowLGPD(false);startSession({...pendingSession,lgpd_accepted:true});setPendingSession(null)
   }
+
   function startSession(user){
     setSession(user)
     const map={admin:"admin",supervisor:"supervisor",leader:"leader",secretary:"secretary",member:"member"}
     setPage(map[user.role]||"member")
   }
+
   return(
-    <div style={{minHeight:"100vh",background:"#f8fafc",fontFamily:"'Outfit',sans-serif",maxWidth:480,margin:"0 auto",position:"relative"}}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap');@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}input,select,textarea{font-family:'Outfit',sans-serif}`}</style>
+    <div style={{minHeight:"100vh",background:"#f0f4f8",fontFamily:"'Outfit',sans-serif",maxWidth:480,margin:"0 auto",position:"relative"}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+        ::-webkit-scrollbar{width:3px}
+        ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+        input,select,textarea{font-family:'Outfit',sans-serif}
+        button{font-family:'Outfit',sans-serif}
+      `}</style>
       <Toast msg={toast.msg} type={toast.type}/>
       {showLGPD&&<LGPDModal onAccept={handleLGPDAccept}/>}
       {page==="login"&&<LoginPage onLogin={doLogin} showToast={showToast}/>}
@@ -204,12 +327,14 @@ export default function App(){
   )
 }
 
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
 function LoginPage({onLogin,showToast}){
   const[cpf,setCpf]=useState("")
   const[pw,setPw]=useState("")
   const[showPw,setShowPw]=useState(false)
   const[err,setErr]=useState("")
   const[loading,setLoading]=useState(false)
+
   async function handleLogin(e){
     e.preventDefault();setErr("");setLoading(true)
     const cf=fmtCPF(cpf.replace(/\D/g,""))
@@ -221,33 +346,45 @@ function LoginPage({onLogin,showToast}){
     if(atob64(data.password_hash)!==pw){setErr("Senha incorreta");setLoading(false);return}
     setLoading(false);onLogin(data)
   }
+
   return(
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",background:"linear-gradient(145deg,#0f172a 0%,#1e3a5f 100%)"}}>
-      <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{width:72,height:72,borderRadius:20,background:"rgba(255,255,255,0.1)",border:"1.5px solid rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 18px",color:"#93c5fd"}}><Icon name="church" size={34}/></div>
-        <h1 style={{color:"#f0f9ff",fontSize:22,fontWeight:900,margin:"0 0 4px"}}>Gestão de Células</h1>
-        <p style={{color:"#7dd3fc",fontSize:13,margin:0,fontWeight:500}}>Promessa Lago dos Peixes</p>
-      </div>
-      <div style={{background:"rgba(255,255,255,0.07)",backdropFilter:"blur(20px)",borderRadius:20,border:"1.5px solid rgba(255,255,255,0.1)",padding:"28px 24px",width:"100%",maxWidth:380}}>
-        <form onSubmit={handleLogin}>
-          <div style={{marginBottom:16}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7dd3fc",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>CPF</label>
-            <input value={cpf} onChange={e=>setCpf(e.target.value)} placeholder="000.000.000-00" maxLength={14} required style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 16px",fontSize:15,color:"#f0f9ff",outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:`linear-gradient(160deg,${C.darker} 0%,${C.primary} 60%,#1a5fa8 100%)`}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 24px 20px"}}>
+        <div style={{animation:"fadeIn 0.5s ease",textAlign:"center",marginBottom:40}}>
+          <div style={{width:90,height:90,borderRadius:24,background:"rgba(255,255,255,0.12)",backdropFilter:"blur(10px)",border:"1.5px solid rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}>
+            <LogoIcon size={56}/>
           </div>
-          <div style={{marginBottom:8,position:"relative"}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7dd3fc",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>Senha</label>
-            <input value={pw} onChange={e=>setPw(e.target.value)} type={showPw?"text":"password"} placeholder="Digite sua senha" required style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 44px 12px 16px",fontSize:15,color:"#f0f9ff",outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
-            <button type="button" onClick={()=>setShowPw(p=>!p)} style={{position:"absolute",right:12,bottom:10,background:"none",border:"none",cursor:"pointer",color:"#7dd3fc",display:"flex"}}><Icon name={showPw?"eye-off":"eye"} size={18}/></button>
-          </div>
-          {err&&<p style={{color:"#fca5a5",fontSize:13,margin:"8px 0",fontWeight:600}}>{err}</p>}
-          <button type="submit" disabled={loading} style={{width:"100%",background:"#2563eb",border:"none",borderRadius:12,color:"#fff",fontSize:15,fontWeight:800,padding:"13px 0",cursor:loading?"wait":"pointer",marginTop:16,fontFamily:"'Outfit',sans-serif",opacity:loading?0.7:1}}>{loading?"Entrando...":"Entrar"}</button>
-        </form>
-        <p style={{color:"#93c5fd",fontSize:12,textAlign:"center",marginTop:16,opacity:0.7}}>Digite seu CPF e senha para entrar</p>
+          <h1 style={{color:"#fff",fontSize:24,fontWeight:900,margin:"0 0 4px",letterSpacing:"-0.5px"}}>Gestão de Células</h1>
+          <p style={{color:"rgba(255,255,255,0.7)",fontSize:14,margin:0,fontWeight:500}}>Promessa Lago dos Peixes</p>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.08)",backdropFilter:"blur(20px)",borderRadius:24,border:"1px solid rgba(255,255,255,0.12)",padding:"28px 24px",width:"100%",maxWidth:380,animation:"slideUp 0.4s ease 0.1s both"}}>
+          <form onSubmit={handleLogin}>
+            <div style={{marginBottom:16}}>
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)",marginBottom:6,letterSpacing:"0.08em",textTransform:"uppercase"}}>CPF</label>
+              <input value={cpf} onChange={e=>setCpf(e.target.value)} placeholder="000.000.000-00" maxLength={14} required
+                style={{width:"100%",background:"rgba(255,255,255,0.1)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"13px 16px",fontSize:15,color:"#fff",outline:"none",fontFamily:"'Outfit',sans-serif",transition:"border-color 0.15s"}}
+                onFocus={e=>e.target.style.borderColor="rgba(255,255,255,0.4)"} onBlur={e=>e.target.style.borderColor="rgba(255,255,255,0.15)"}/>
+            </div>
+            <div style={{marginBottom:8,position:"relative"}}>
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)",marginBottom:6,letterSpacing:"0.08em",textTransform:"uppercase"}}>Senha</label>
+              <input value={pw} onChange={e=>setPw(e.target.value)} type={showPw?"text":"password"} placeholder="Digite sua senha" required
+                style={{width:"100%",background:"rgba(255,255,255,0.1)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"13px 48px 13px 16px",fontSize:15,color:"#fff",outline:"none",fontFamily:"'Outfit',sans-serif"}}/>
+              <button type="button" onClick={()=>setShowPw(p=>!p)} style={{position:"absolute",right:14,bottom:12,background:"none",border:"none",cursor:"pointer",color:"rgba(255,255,255,0.5)",display:"flex"}}><Icon name={showPw?"eye-off":"eye"} size={18}/></button>
+            </div>
+            {err&&<p style={{color:"#fca5a5",fontSize:13,margin:"10px 0 0",fontWeight:600,background:"rgba(239,68,68,0.1)",padding:"8px 12px",borderRadius:8}}>{err}</p>}
+            <button type="submit" disabled={loading}
+              style={{width:"100%",background:`linear-gradient(135deg,${C.gold},#d4820f)`,border:"none",borderRadius:12,color:"#fff",fontSize:15,fontWeight:800,padding:"14px 0",cursor:loading?"wait":"pointer",marginTop:20,fontFamily:"'Outfit',sans-serif",opacity:loading?0.7:1,boxShadow:"0 4px 16px rgba(232,146,26,0.4)",letterSpacing:"0.02em"}}>
+              {loading?"Entrando...":"Entrar"}
+            </button>
+          </form>
+          <p style={{color:"rgba(255,255,255,0.4)",fontSize:12,textAlign:"center",marginTop:16,marginBottom:0}}>Digite seu CPF e senha para entrar</p>
+        </div>
       </div>
     </div>
   )
 }
 
+// ─── HOOKS E UTILS ────────────────────────────────────────────────────────────
 function useTable(table,filter=null){
   const[data,setData]=useState([])
   const[loading,setLoading]=useState(true)
@@ -265,7 +402,10 @@ function useTable(table,filter=null){
   },[table,filter?.val])
   return{data,loading,reload:load}
 }
-async function addLog(session,action,detail){await supabase.from("logs").insert({action,detail,user_id:session?.id})}
+
+async function addLog(session,action,detail){
+  await supabase.from("logs").insert({action,detail,user_id:session?.id})
+}
 
 function ChangePasswordModal({open,onClose,session,showToast}){
   const[oldPw,setOldPw]=useState("")
@@ -294,14 +434,18 @@ function MemberSearchModal({open,onClose,members,onSelect,title="Buscar Membro"}
   const filtered=members.filter(m=>m.name.toLowerCase().includes(search.toLowerCase())||(m.phone||"").includes(search))
   return(
     <Modal open={open} onClose={onClose} title={title}>
-      <div style={{position:"relative",marginBottom:12}}>
+      <div style={{position:"relative",marginBottom:14}}>
         <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",pointerEvents:"none"}}><Icon name="search" size={15}/></div>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar pelo nome..." autoFocus style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px 10px 36px",fontSize:14,outline:"none"}}/>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar pelo nome..." autoFocus
+          style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px 10px 36px",fontSize:14,outline:"none"}}/>
       </div>
       {filtered.slice(0,10).map(m=>(
-        <button key={m.id} onClick={()=>{onSelect(m);onClose()}} style={{width:"100%",textAlign:"left",background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",cursor:"pointer",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
-          <Avatar name={m.name} photo={m.photo_url} size={32} color="#2563eb"/>
-          <div><div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{m.name}</div><div style={{fontSize:11,color:"#94a3b8"}}>{m.phone||"—"}</div></div>
+        <button key={m.id} onClick={()=>{onSelect(m);onClose()}} style={{width:"100%",textAlign:"left",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:12,padding:"10px 14px",cursor:"pointer",marginBottom:6,display:"flex",alignItems:"center",gap:12,transition:"background 0.1s"}}
+          onMouseOver={e=>e.currentTarget.style.background="#eff6ff"} onMouseOut={e=>e.currentTarget.style.background="#f8fafc"}>
+          <Avatar name={m.name} photo={m.photo_url} size={34} color={C.primary}/>
+          <div><div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{m.name}</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>{m.phone||"Sem telefone"}</div>
+          </div>
         </button>
       ))}
       {filtered.length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhum membro encontrado</p>}
@@ -309,37 +453,77 @@ function MemberSearchModal({open,onClose,members,onSelect,title="Buscar Membro"}
   )
 }
 
+// ─── HEADER COMPONENT ─────────────────────────────────────────────────────────
+function Header({title,subtitle,logout,onChangePw}){
+  return(
+    <header style={{background:`linear-gradient(135deg,${C.darker},${C.primary})`,padding:"16px 18px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <LogoIcon size={32}/>
+          <div>
+            <div style={{color:"#fff",fontSize:15,fontWeight:800,letterSpacing:"-0.3px"}}>{title}</div>
+            {subtitle&&<div style={{color:"rgba(255,255,255,0.6)",fontSize:11,fontWeight:500}}>{subtitle}</div>}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          {onChangePw&&<button onClick={onChangePw} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex"}}><Icon name="key" size={15}/></button>}
+          <button onClick={logout} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}>
+            <Icon name="log-out" size={14}/>Sair
+          </button>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+// ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 function AdminDashboard({session,logout,showToast}){
   const[tab,setTab]=useState("dashboard")
   const[showChangePw,setShowChangePw]=useState(false)
   const tabs=[
-    {id:"dashboard",label:"Painel",icon:"gauge"},{id:"cells",label:"Células",icon:"grid"},
-    {id:"members",label:"Membros",icon:"users"},{id:"attendance",label:"Presença",icon:"check-circle"},
-    {id:"events",label:"Eventos",icon:"event"},{id:"reports",label:"Relatórios",icon:"bar-chart"},
-    {id:"messages",label:"Mensagens",icon:"message"},{id:"requests",label:"Solicits.",icon:"inbox"},
+    {id:"dashboard",label:"Painel",icon:"gauge"},
+    {id:"cells",label:"Células",icon:"grid"},
+    {id:"members",label:"Membros",icon:"users"},
+    {id:"meetings",label:"Encontros",icon:"meeting"},
+    {id:"events",label:"Eventos",icon:"event"},
+    {id:"prayer",label:"Orações",icon:"pray"},
+    {id:"reports",label:"Relatórios",icon:"bar-chart"},
+    {id:"messages",label:"Mensagens",icon:"message"},
+    {id:"requests",label:"Solicits.",icon:"inbox"},
     {id:"logs",label:"Auditoria",icon:"history"},
   ]
   return(
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-      <header style={{background:"#0f172a",padding:"14px 18px 0",position:"sticky",top:0,zIndex:100}}>
+      <header style={{background:`linear-gradient(135deg,${C.darker},${C.primary})`,padding:"14px 18px 0",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div><div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>Painel do Gestor</div><div style={{color:"#7dd3fc",fontSize:12}}>{session?.name}</div></div>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"#cbd5e1",display:"flex"}}><Icon name="key" size={15}/></button>
-            <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"#cbd5e1",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:600}}><Icon name="log-out" size={15}/>Sair</button>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <LogoIcon size={30}/>
+            <div>
+              <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Painel do Gestor</div>
+              <div style={{color:"rgba(255,255,255,0.6)",fontSize:11}}>{session?.name}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex"}}><Icon name="key" size={15}/></button>
+            <button onClick={logout} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Icon name="log-out" size={14}/>Sair</button>
           </div>
         </div>
-        <div style={{display:"flex",gap:1,overflowX:"auto",paddingBottom:2}}>
-          {tabs.map(t=>(<button key={t.id} onClick={()=>setTab(t.id)} style={{background:tab===t.id?"rgba(37,99,235,0.85)":"transparent",border:"none",borderRadius:"8px 8px 0 0",padding:"7px 10px 10px",cursor:"pointer",color:tab===t.id?"#fff":"#94a3b8",fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:50,flexShrink:0}}><Icon name={t.icon} size={15}/><span>{t.label}</span></button>))}
+        <div style={{display:"flex",gap:1,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+          {tabs.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{background:tab===t.id?"rgba(255,255,255,0.15)":"transparent",border:"none",borderRadius:"8px 8px 0 0",padding:"7px 10px 10px",cursor:"pointer",color:tab===t.id?"#fff":"rgba(255,255,255,0.5)",fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:52,flexShrink:0,transition:"all 0.15s",borderBottom:tab===t.id?`2px solid ${C.gold}`:"2px solid transparent"}}>
+              <Icon name={t.icon} size={15}/><span>{t.label}</span>
+            </button>
+          ))}
         </div>
       </header>
-      <div style={{flex:1,padding:"16px 16px 80px",overflowY:"auto"}}>
+      <div style={{flex:1,padding:"16px 16px 80px",overflowY:"auto",animation:"fadeIn 0.2s ease"}}>
         {tab==="dashboard"&&<AdminOverview session={session} showToast={showToast} setTab={setTab}/>}
         {tab==="cells"&&<CellsPanel session={session} showToast={showToast}/>}
         {tab==="members"&&<MembersPanel session={session} showToast={showToast}/>}
-        {tab==="attendance"&&<AttendancePanel session={session} showToast={showToast}/>}
+        {tab==="meetings"&&<MeetingsPanel session={session} showToast={showToast}/>}
         {tab==="events"&&<EventsPanel session={session} showToast={showToast}/>}
-        {tab==="reports"&&<ReportsPanel/>}
+        {tab==="prayer"&&<PrayerPanel session={session} showToast={showToast}/>}
+        {tab==="reports"&&<ReportsPanel session={session}/>}
         {tab==="messages"&&<MessagesPanel session={session} showToast={showToast}/>}
         {tab==="requests"&&<AllRequestsPanel session={session} showToast={showToast}/>}
         {tab==="logs"&&<LogsPanel/>}
@@ -354,44 +538,103 @@ function AdminOverview({session,showToast,setTab}){
   const{data:members}=useTable("members")
   const{data:requests}=useTable("inactivation_requests")
   const{data:cellReqs}=useTable("cell_change_requests")
-  const activeCells=cells.filter(c=>c.active!==false)
+  const{data:prayers}=useTable("prayer_requests")
   const activeMembers=members.filter(m=>m.status==="Membro")
+  const visitors=members.filter(m=>m.status==="Visitante")
   const baptized=members.filter(m=>m.baptized).length
   const pending=requests.filter(r=>r.status==="pending").length+cellReqs.filter(r=>r.status==="pending").length
+  const pendingPrayers=prayers.filter(p=>p.status==="pending").length
+
   const currentMonth=getCurrentMonth()
   const birthdays=members.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
-  const nextMeetings=cells.filter(c=>c.active!==false&&c.next_meeting_date).sort((a,b)=>a.next_meeting_date.localeCompare(b.next_meeting_date)).slice(0,3)
+  const{start,end}=getCurrentWeekDates()
+  const weekBirthdays=members.filter(m=>{
+    if(!m.birth_date)return false
+    const b=new Date(m.birth_date)
+    const thisYear=new Date(new Date().getFullYear(),b.getMonth(),b.getDate())
+    return thisYear>=start&&thisYear<=end
+  })
+
+  const nextMeetings=cells.filter(c=>c.active!==false&&c.cell_status!=="Inativa"&&c.next_meeting_date).sort((a,b)=>a.next_meeting_date.localeCompare(b.next_meeting_date)).slice(0,3)
+
   return(
-    <div>
-      <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Visão Geral</h2>
+    <div style={{animation:"fadeIn 0.2s ease"}}>
+      {weekBirthdays.length>0&&(
+        <div style={{background:`linear-gradient(135deg,${C.gold},#d4820f)`,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(232,146,26,0.3)"}}>
+          <div style={{fontSize:28}}>🎂</div>
+          <div>
+            <div style={{color:"#fff",fontSize:13,fontWeight:800,marginBottom:2}}>Aniversário esta semana!</div>
+            <div style={{color:"rgba(255,255,255,0.85)",fontSize:12}}>{weekBirthdays.map(m=>m.name.split(" ")[0]).join(", ")}</div>
+          </div>
+        </div>
+      )}
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-        <Stat label="Células" value={activeCells.length} color="#2563eb" icon="grid"/>
-        <Stat label="Membros" value={activeMembers.length} color="#059669" icon="users"/>
-        <Stat label="Batizados" value={baptized} color="#d97706" icon="check-circle"/>
-        <Stat label="Pendências" value={pending} color="#dc2626" icon="inbox"/>
+        <Stat label="Membros" value={activeMembers.length} color={C.primary} icon="users" sub={`+ ${visitors.length} visitantes`}/>
+        <Stat label="Células" value={cells.filter(c=>c.active!==false).length} color={C.gold} icon="grid"/>
+        <Stat label="Batizados" value={baptized} color={C.success} icon="check-circle"/>
+        <Stat label="Pendências" value={pending+pendingPrayers} color={C.danger} icon="bell"/>
       </div>
+
       {nextMeetings.length>0&&(
-        <Card style={{marginBottom:14,border:"1.5px solid #bfdbfe",background:"#eff6ff"}}>
-          <div style={{fontSize:14,fontWeight:800,color:"#1e40af",marginBottom:10}}>📅 Próximos Encontros</div>
-          {nextMeetings.map(c=>(<div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:"1px solid #bfdbfe"}}><span style={{fontSize:13,fontWeight:700,color:"#1e40af"}}>{c.name}</span><div style={{textAlign:"right"}}><div style={{fontSize:12,fontWeight:700,color:"#1e40af"}}>{fmtDate(c.next_meeting_date)}</div><div style={{fontSize:11,color:"#3b82f6"}}>{c.time||""} • {c.frequency||"Semanal"}</div></div></div>))}
+        <Card style={{marginBottom:14,border:`1px solid ${C.primary}20`,background:`${C.primary}05`}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <div style={{background:C.primary+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="calendar" size={16} color={C.primary}/></div>
+            <span style={{fontSize:14,fontWeight:800,color:C.primary}}>Próximos Encontros</span>
+          </div>
+          {nextMeetings.map(c=>(
+            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:`1px solid ${C.primary}15`}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{c.name}</div>
+                <div style={{fontSize:11,color:"#64748b"}}>{c.cell_type||"Adultos"}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:13,fontWeight:800,color:C.primary}}>{fmtDate(c.next_meeting_date)}</div>
+                <div style={{fontSize:11,color:"#64748b"}}>{c.time} • {c.frequency||"Semanal"}</div>
+              </div>
+            </div>
+          ))}
         </Card>
       )}
+
       {birthdays.length>0&&(
-        <Card style={{marginBottom:14,border:"1.5px solid #fde68a",background:"#fffbeb"}}>
-          <div style={{fontSize:14,fontWeight:800,color:"#92400e",marginBottom:10}}>🎂 Aniversariantes do Mês</div>
-          {birthdays.map(m=>(<div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderTop:"1px solid #fde68a"}}><Avatar name={m.name} photo={m.photo_url} size={28} color="#d97706"/><div><div style={{fontSize:13,fontWeight:700,color:"#92400e"}}>{m.name}</div><div style={{fontSize:11,color:"#b45309"}}>{fmtDate(m.birth_date)}{m.age?` • ${m.age} anos`:""}</div></div></div>))}
+        <Card style={{marginBottom:14,border:"1px solid #fde68a",background:"#fffbeb"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <span style={{fontSize:20}}>🎂</span>
+            <span style={{fontSize:14,fontWeight:800,color:"#92400e"}}>Aniversariantes de {["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][currentMonth]}</span>
+          </div>
+          {birthdays.map(m=>(
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:"1px solid #fde68a"}}>
+              <Avatar name={m.name} photo={m.photo_url} size={30} color={C.gold}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#92400e"}}>{m.name}</div>
+                <div style={{fontSize:11,color:"#b45309"}}>{fmtDate(m.birth_date)}{m.age?` • ${m.age} anos`:""}</div>
+              </div>
+              {m.phone&&<a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:8,padding:"4px 8px",display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:"#166534",textDecoration:"none"}}><Icon name="whatsapp" size={12}/>Parabéns</a>}
+            </div>
+          ))}
         </Card>
       )}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <Btn full icon="grid" onClick={()=>setTab("cells")}>Gerenciar Células</Btn>
-        <Btn full variant="secondary" icon="users" onClick={()=>setTab("members")}>Gerenciar Membros</Btn>
-        <Btn full variant="secondary" icon="check-circle" onClick={()=>setTab("attendance")}>Registrar Presença</Btn>
-        <Btn full variant="secondary" icon="event" onClick={()=>setTab("events")}>Gerenciar Eventos</Btn>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {[
+          {id:"cells",icon:"grid",label:"Células",color:C.primary},
+          {id:"members",icon:"users",label:"Membros",color:C.gold},
+          {id:"meetings",icon:"meeting",label:"Encontros",color:C.success},
+          {id:"prayer",icon:"pray",label:"Orações",color:C.purple},
+        ].map(item=>(
+          <button key={item.id} onClick={()=>setTab(item.id)} style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",padding:"16px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",boxShadow:"0 1px 6px rgba(0,0,0,0.05)",transition:"all 0.15s"}}
+            onMouseOver={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseOut={e=>e.currentTarget.style.transform="translateY(0)"}>
+            <div style={{width:42,height:42,borderRadius:12,background:item.color+"15",display:"flex",alignItems:"center",justifyContent:"center",color:item.color,flexShrink:0}}><Icon name={item.icon} size={20}/></div>
+            <span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{item.label}</span>
+          </button>
+        ))}
       </div>
     </div>
   )
 }
 
+// ─── CELLS PANEL ──────────────────────────────────────────────────────────────
 function CellsPanel({session,showToast}){
   const{data:cells,loading}=useTable("cells")
   const{data:members}=useTable("members")
@@ -399,12 +642,15 @@ function CellsPanel({session,showToast}){
   const[editing,setEditing]=useState(null)
   const[deleteId,setDeleteId]=useState(null)
   const[memberSearch,setMemberSearch]=useState(null)
-  const emptyForm={name:"",day:"Quarta",time:"19:30",neighborhood:"",street:"",number:"",cep:"",started_at:"",growth_goal:"",active:true,frequency:"Semanal",reminder_hours:24,reminder_channels:[],auto_create_meetings:true,leaders_ids:[],secretaries_ids:[],trainees_ids:[],hosts_ids:[],supervisor_id:""}
+  const[filterType,setFilterType]=useState("")
+  const[filterStatus,setFilterStatus]=useState("")
+
+  const emptyForm={name:"",day:"Quarta",time:"19:30",neighborhood:"",street:"",number:"",cep:"",started_at:"",growth_goal:"",active:true,cell_type:"Adultos",cell_status:"Ativa",origin_cell_id:"",frequency:"Semanal",reminder_hours:24,reminder_channels:[],auto_create_meetings:true,leaders_ids:[],secretaries_ids:[],trainees_ids:[],hosts_ids:[],supervisor_id:""}
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
 
   function openEdit(c){
-    setForm({name:c.name,day:c.day||"Quarta",time:c.time||"",neighborhood:c.neighborhood||"",street:c.street||"",number:c.number||"",cep:c.cep||"",started_at:c.started_at||"",growth_goal:c.growth_goal||"",active:c.active!==false,frequency:c.frequency||"Semanal",reminder_hours:c.reminder_hours||24,reminder_channels:c.reminder_channels||[],auto_create_meetings:c.auto_create_meetings!==false,leaders_ids:c.leaders_ids||[],secretaries_ids:c.secretaries_ids||[],trainees_ids:c.trainees_ids||[],hosts_ids:c.hosts_ids||[],supervisor_id:c.supervisor_id||""})
+    setForm({name:c.name,day:c.day||"Quarta",time:c.time||"",neighborhood:c.neighborhood||"",street:c.street||"",number:c.number||"",cep:c.cep||"",started_at:c.started_at||"",growth_goal:c.growth_goal||"",active:c.active!==false,cell_type:c.cell_type||"Adultos",cell_status:c.cell_status||"Ativa",origin_cell_id:c.origin_cell_id||"",frequency:c.frequency||"Semanal",reminder_hours:c.reminder_hours||24,reminder_channels:c.reminder_channels||[],auto_create_meetings:c.auto_create_meetings!==false,leaders_ids:c.leaders_ids||[],secretaries_ids:c.secretaries_ids||[],trainees_ids:c.trainees_ids||[],hosts_ids:c.hosts_ids||[],supervisor_id:c.supervisor_id||""})
     setEditing(c.id);setModal(true)
   }
 
@@ -419,8 +665,7 @@ function CellsPanel({session,showToast}){
   async function save(){
     if(!form.name.trim()){showToast("Nome é obrigatório","error");return}
     const nextDate=form.auto_create_meetings?getNextMeetingDate(form.day):null
-    const payload={name:form.name.trim().toUpperCase(),day:form.day,time:form.time,neighborhood:form.neighborhood,street:form.street,number:form.number,cep:form.cep,supervisor_id:form.supervisor_id||null,started_at:form.started_at||null,growth_goal:parseInt(form.growth_goal)||0,active:form.active,frequency:form.frequency,reminder_hours:parseInt(form.reminder_hours)||24,reminder_channels:form.reminder_channels,auto_create_meetings:form.auto_create_meetings,next_meeting_date:nextDate,leaders_ids:form.leaders_ids,secretaries_ids:form.secretaries_ids,trainees_ids:form.trainees_ids,hosts_ids:form.hosts_ids}
-    // Update user roles based on cell functions
+    const payload={name:form.name.trim().toUpperCase(),day:form.day,time:form.time,neighborhood:form.neighborhood,street:form.street,number:form.number,cep:form.cep,supervisor_id:form.supervisor_id||null,started_at:form.started_at||null,growth_goal:parseInt(form.growth_goal)||0,active:form.cell_status!=="Inativa",cell_type:form.cell_type,cell_status:form.cell_status,origin_cell_id:form.origin_cell_id||null,frequency:form.frequency,reminder_hours:parseInt(form.reminder_hours)||24,reminder_channels:form.reminder_channels,auto_create_meetings:form.auto_create_meetings,next_meeting_date:nextDate,leaders_ids:form.leaders_ids,secretaries_ids:form.secretaries_ids,trainees_ids:form.trainees_ids,hosts_ids:form.hosts_ids}
     if(editing){
       const{error}=await supabase.from("cells").update(payload).eq("id",editing)
       if(error){showToast("Erro: "+error.message,"error");return}
@@ -432,15 +677,21 @@ function CellsPanel({session,showToast}){
       await addLog(session,"create",`Célula criada: ${form.name}`)
       showToast("Célula criada!")
     }
-    // Sync user roles
-    for(const id of form.leaders_ids) await supabase.from("users").update({role:"leader",cell_id:editing}).eq("member_id",id)
-    for(const id of form.secretaries_ids) await supabase.from("users").update({role:"secretary",cell_id:editing}).eq("member_id",id)
+    for(const id of form.leaders_ids)await supabase.from("users").update({role:"leader",cell_id:editing}).eq("member_id",id)
+    for(const id of form.secretaries_ids)await supabase.from("users").update({role:"secretary",cell_id:editing}).eq("member_id",id)
     setModal(false);setEditing(null);setForm(emptyForm)
   }
 
-  async function toggleActive(cell){await supabase.from("cells").update({active:!cell.active}).eq("id",cell.id);showToast(cell.active?"Célula inativada":"Célula reativada!")}
   async function del(){await supabase.from("cells").delete().eq("id",deleteId);showToast("Célula removida");setDeleteId(null)}
 
+  const filteredCells=cells.filter(c=>{
+    const matchType=!filterType||c.cell_type===filterType
+    const matchStatus=!filterStatus||(c.cell_status||"Ativa")===filterStatus
+    return matchType&&matchStatus
+  })
+
+  const statusColors={"Ativa":C.success,"Inativa":C.danger,"Multiplicada":C.purple}
+  const typeColors={"Adultos":C.primary,"Jovens":C.gold,"Kids/Infantil":C.success,"Casais":"#e11d8c","Homens":"#0891b2","Mulheres":"#a855f7"}
   const mOpts=[{value:"",label:"— Nenhum —"},...members.filter(m=>m.status==="Membro").map(m=>({value:m.id,label:m.name}))]
 
   function FuncSection({field,label,color}){
@@ -452,12 +703,13 @@ function CellsPanel({session,showToast}){
           <label style={{fontSize:11,fontWeight:700,color:"#64748b",letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}</label>
           <button type="button" onClick={()=>setMemberSearch({field,label})} style={{background:color+"15",border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",color,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}><Icon name="plus" size={12}/>Adicionar</button>
         </div>
-        {mems.length===0&&<p style={{fontSize:12,color:"#94a3b8",margin:0}}>Nenhum {label.toLowerCase()} definido</p>}
+        {mems.length===0&&<p style={{fontSize:12,color:"#94a3b8",margin:0,fontStyle:"italic"}}>Nenhum {label.toLowerCase()} definido</p>}
         {mems.map(m=>(
-          <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:color+"10",borderRadius:8,marginBottom:4}}>
-            <Avatar name={m.name} size={24} color={color}/>
+          <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:color+"08",borderRadius:10,marginBottom:4,border:`1px solid ${color}20`}}>
+            <Avatar name={m.name} size={26} color={color}/>
             <span style={{fontSize:13,fontWeight:600,color:"#334155",flex:1}}>{m.name}</span>
-            <button type="button" onClick={()=>toggleFuncMember(field,m.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#dc2626",display:"flex"}}><Icon name="x" size={14}/></button>
+            {m.phone&&<a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",borderRadius:6,padding:"3px 6px",display:"flex",color:"#166534",textDecoration:"none"}}><Icon name="whatsapp" size={12}/></a>}
+            <button type="button" onClick={()=>toggleFuncMember(field,m.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.danger,display:"flex"}}><Icon name="x" size={14}/></button>
           </div>
         ))}
       </div>
@@ -467,58 +719,79 @@ function CellsPanel({session,showToast}){
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-        <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Células</h2>
+        <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Células <span style={{fontSize:13,color:"#94a3b8",fontWeight:500}}>({filteredCells.length})</span></h2>
         <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Nova</Btn>
       </div>
+
+      <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:2}}>
+        {["",..."Adultos Jovens Kids/Infantil Casais Homens Mulheres".split(" ")].map(t=>(
+          <button key={t} onClick={()=>setFilterType(t)} style={{padding:"6px 14px",borderRadius:20,fontSize:12,fontWeight:700,border:`1.5px solid ${filterType===t?C.primary:"#e2e8f0"}`,background:filterType===t?C.primary:"#fff",color:filterType===t?"#fff":"#64748b",cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+            {t||"Todos"}
+          </button>
+        ))}
+      </div>
+
       {loading&&<Loader/>}
-      {!loading&&cells.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhuma célula cadastrada</p></Card>}
-      {cells.map(cell=>{
+      {!loading&&filteredCells.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhuma célula encontrada</p></Card>}
+      {filteredCells.map(cell=>{
         const mc=members.filter(m=>m.cell_id===cell.id&&m.status==="Membro").length
         const visitors=members.filter(m=>m.cell_id===cell.id&&m.status==="Visitante").length
         const leaders=members.filter(m=>cell.leaders_ids?.includes(m.id))
-        const isActive=cell.active!==false
+        const cStatus=cell.cell_status||"Ativa"
+        const cType=cell.cell_type||"Adultos"
+        const originCell=cell.origin_cell_id?cells.find(c=>c.id===cell.origin_cell_id):null
         return(
-          <Card key={cell.id} style={{marginBottom:10,opacity:isActive?1:0.6,border:isActive?"1.5px solid #f1f5f9":"1.5px solid #fecaca"}}>
+          <Card key={cell.id} style={{marginBottom:10,opacity:cStatus==="Inativa"?0.65:1}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
-              <div>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{cell.name}</div>
-                  {!isActive&&<Badge label="Inativa" color="#dc2626"/>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                  <span style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{cell.name}</span>
+                  <Badge label={cType} color={typeColors[cType]||C.primary}/>
+                  <Badge label={cStatus} color={statusColors[cStatus]||C.success}/>
                 </div>
-                <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{cell.neighborhood||"—"} • {cell.day} às {cell.time||"—"}</div>
-                {cell.frequency&&<div style={{fontSize:11,color:"#7c3aed",marginTop:2}}>🔄 {cell.frequency}{cell.next_meeting_date?` • Próximo: ${fmtDate(cell.next_meeting_date)}`:""}</div>}
+                <div style={{fontSize:12,color:"#64748b"}}>{cell.neighborhood||"—"} • {cell.day} às {cell.time||"—"}</div>
+                {cell.frequency&&<div style={{fontSize:11,color:C.purple,marginTop:2}}>🔄 {cell.frequency}{cell.next_meeting_date?` • Próx: ${fmtDate(cell.next_meeting_date)}`:""}</div>}
+                {originCell&&<div style={{fontSize:11,color:C.gold,marginTop:2}}>🌱 Multiplicada de: {originCell.name}</div>}
               </div>
-              <div style={{display:"flex",gap:5}}>
-                <button onClick={()=>openEdit(cell)} style={{background:"#eff6ff",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#2563eb"}}><Icon name="edit" size={14}/></button>
-                <button onClick={()=>toggleActive(cell)} style={{background:isActive?"#fef3c7":"#dcfce7",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:isActive?"#d97706":"#059669"}}><Icon name={isActive?"pause":"play"} size={14}/></button>
-                {session?.role==="admin"&&<button onClick={()=>setDeleteId(cell.id)} style={{background:"#fef2f2",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#dc2626"}}><Icon name="trash" size={14}/></button>}
+              <div style={{display:"flex",gap:5,flexShrink:0,marginLeft:8}}>
+                <button onClick={()=>openEdit(cell)} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.primary}}><Icon name="edit" size={14}/></button>
+                {session?.role==="admin"&&<button onClick={()=>setDeleteId(cell.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger}}><Icon name="trash" size={14}/></button>}
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12,color:"#64748b",marginBottom:8}}>
-              <span>👤 Líderes: <b style={{color:"#334155"}}>{leaders.length>0?leaders.map(l=>l.name.split(" ")[0]).join(", "):"—"}</b></span>
-              <span>👥 Membros: <b style={{color:"#334155"}}>{mc}</b></span>
-              <span>👋 Visitantes: <b style={{color:"#334155"}}>{visitors}</b></span>
-              {cell.growth_goal>0&&<span>🎯 Meta: <b style={{color:"#334155"}}>{cell.growth_goal}</b></span>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12,color:"#64748b",marginBottom:10}}>
+              <span>👤 <b style={{color:"#334155"}}>{leaders.length>0?leaders.map(l=>l.name.split(" ")[0]).join(", "):"—"}</b></span>
+              <span>👥 <b style={{color:"#334155"}}>{mc} membros{visitors>0?` + ${visitors} vis.`:""}</b></span>
             </div>
-            {cell.growth_goal>0&&<ProgressBar value={mc} max={cell.growth_goal} color="#2563eb"/>}
-            {cell.started_at&&<div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>📅 Iniciada em: {fmtDate(cell.started_at)}</div>}
+            {cell.growth_goal>0&&<ProgressBar value={mc} max={cell.growth_goal} color={C.primary}/>}
+            {cell.started_at&&<div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>📅 Iniciada: {fmtDate(cell.started_at)}</div>}
           </Card>
         )
       })}
 
       <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Célula":"Nova Célula"}>
         <Inp label="Nome" value={form.name} onChange={v=>f("name")(v.toUpperCase())} required/>
-        <Sel label="Dia da Semana" value={form.day} onChange={f("day")} options={DAYS.map(d=>({value:d,label:d}))}/>
-        <Inp label="Horário" type="time" value={form.time} onChange={f("time")}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Sel label="Tipo" value={form.cell_type} onChange={f("cell_type")} options={CELL_TYPES.map(t=>({value:t,label:t}))}/>
+          <Sel label="Status" value={form.cell_status} onChange={f("cell_status")} options={CELL_STATUS.map(s=>({value:s,label:s}))}/>
+        </div>
+        {form.cell_status==="Multiplicada"&&(
+          <Sel label="Célula de Origem" value={form.origin_cell_id} onChange={f("origin_cell_id")} options={[{value:"",label:"— Selecione —"},...cells.filter(c=>c.id!==editing).map(c=>({value:c.id,label:c.name}))]}/>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Sel label="Dia" value={form.day} onChange={f("day")} options={DAYS.map(d=>({value:d,label:d}))}/>
+          <Inp label="Horário" type="time" value={form.time} onChange={f("time")}/>
+        </div>
         <Sel label="Periodicidade" value={form.frequency} onChange={f("frequency")} options={FREQUENCIES.map(fr=>({value:fr,label:fr}))}/>
-        <div style={{marginBottom:14}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}><input type="checkbox" checked={form.auto_create_meetings} onChange={e=>f("auto_create_meetings")(e.target.checked)} style={{width:16,height:16}}/><span style={{fontSize:13,fontWeight:600,color:"#334155"}}>Criar encontros automaticamente</span></label></div>
-        <Inp label="Data de Início" type="date" value={form.started_at} onChange={f("started_at")}/>
-        <Inp label="Meta de Membros" type="number" value={form.growth_goal} onChange={f("growth_goal")} placeholder="Ex: 20"/>
-        <div style={{marginBottom:14,background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:12,padding:14}}>
-          <p style={{fontSize:12,fontWeight:700,color:"#166534",marginBottom:10,textTransform:"uppercase",letterSpacing:"0.04em"}}>🔔 Lembrete Automático</p>
+        <div style={{marginBottom:14}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}><input type="checkbox" checked={form.auto_create_meetings} onChange={e=>f("auto_create_meetings")(e.target.checked)} style={{width:16,height:16,accentColor:C.primary}}/><span style={{fontSize:13,fontWeight:600,color:"#334155"}}>Criar encontros automaticamente</span></label></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Inp label="Data de Início" type="date" value={form.started_at} onChange={f("started_at")}/>
+          <Inp label="Meta de Membros" type="number" value={form.growth_goal} onChange={f("growth_goal")} placeholder="Ex: 20"/>
+        </div>
+        <div style={{marginBottom:14,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:14,padding:14}}>
+          <p style={{fontSize:12,fontWeight:700,color:C.success,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.04em"}}>🔔 Lembrete Automático</p>
           <Inp label="Enviar X horas antes" type="number" value={form.reminder_hours} onChange={f("reminder_hours")} placeholder="Ex: 24"/>
           <div style={{display:"flex",gap:8}}>
-            {["SMS","WhatsApp","Email"].map(ch=>(<button key={ch} type="button" onClick={()=>toggleChannel(ch)} style={{flex:1,padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,border:`1.5px solid ${form.reminder_channels.includes(ch)?"#059669":"#e2e8f0"}`,background:form.reminder_channels.includes(ch)?"#dcfce7":"#f8fafc",color:form.reminder_channels.includes(ch)?"#166534":"#64748b",cursor:"pointer"}}>{ch==="SMS"?"📱":ch==="WhatsApp"?"💬":"📧"} {ch}</button>))}
+            {["SMS","WhatsApp","Email"].map(ch=>(<button key={ch} type="button" onClick={()=>toggleChannel(ch)} style={{flex:1,padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,border:`1.5px solid ${form.reminder_channels.includes(ch)?C.success:"#e2e8f0"}`,background:form.reminder_channels.includes(ch)?"#dcfce7":"#f8fafc",color:form.reminder_channels.includes(ch)?C.success:"#64748b",cursor:"pointer"}}>{ch==="SMS"?"📱":ch==="WhatsApp"?"💬":"📧"} {ch}</button>))}
           </div>
         </div>
         <Inp label="CEP" value={form.cep} onChange={v=>{f("cep")(v);searchCep(v)}} placeholder="00000-000"/>
@@ -528,21 +801,17 @@ function CellsPanel({session,showToast}){
           <Inp label="Número" value={form.number} onChange={f("number")}/>
         </div>
         <Sel label="Supervisor" value={form.supervisor_id} onChange={f("supervisor_id")} options={mOpts}/>
-        <div style={{borderTop:"1.5px solid #f1f5f9",margin:"12px 0",paddingTop:12}}>
-          <p style={{fontSize:12,fontWeight:800,color:"#0f172a",marginBottom:12,textTransform:"uppercase",letterSpacing:"0.04em"}}>Funções na Célula</p>
-          <FuncSection field="leaders_ids" label="Líderes" color="#059669"/>
-          <FuncSection field="secretaries_ids" label="Secretários" color="#d97706"/>
-          <FuncSection field="trainees_ids" label="Líderes em Treinamento" color="#7c3aed"/>
+        <div style={{borderTop:"1px solid #f1f5f9",margin:"14px 0",paddingTop:14}}>
+          <p style={{fontSize:12,fontWeight:800,color:"#0f172a",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.04em"}}>Funções na Célula</p>
+          <FuncSection field="leaders_ids" label="Líderes" color={C.success}/>
+          <FuncSection field="secretaries_ids" label="Secretários" color={C.gold}/>
+          <FuncSection field="trainees_ids" label="Líderes em Treinamento" color={C.purple}/>
           <FuncSection field="hosts_ids" label="Anfitriões" color="#0891b2"/>
         </div>
-        <div style={{marginBottom:14}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}><input type="checkbox" checked={form.active} onChange={e=>f("active")(e.target.checked)} style={{width:16,height:16}}/><span style={{fontSize:13,fontWeight:600,color:"#334155"}}>Célula ativa</span></label></div>
         <Btn full onClick={save} style={{marginTop:8}}>{editing?"Salvar Alterações":"Criar Célula"}</Btn>
       </Modal>
 
-      {memberSearch&&(
-        <MemberSearchModal open title={`Adicionar ${memberSearch.label}`} members={members.filter(m=>m.status==="Membro"&&!form[memberSearch.field].includes(m.id))} onSelect={m=>toggleFuncMember(memberSearch.field,m.id)} onClose={()=>setMemberSearch(null)}/>
-      )}
-
+      {memberSearch&&<MemberSearchModal open title={`Adicionar ${memberSearch.label}`} members={members.filter(m=>m.status==="Membro"&&!form[memberSearch.field].includes(m.id))} onSelect={m=>toggleFuncMember(memberSearch.field,m.id)} onClose={()=>setMemberSearch(null)}/>}
       {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}>
         <p style={{color:"#64748b",marginBottom:16}}>Tem certeza? Esta ação não pode ser desfeita.</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Btn variant="ghost" onClick={()=>setDeleteId(null)}>Cancelar</Btn><Btn variant="danger" onClick={del}>Excluir</Btn></div>
@@ -551,6 +820,7 @@ function CellsPanel({session,showToast}){
   )
 }
 
+// ─── MEMBERS PANEL ────────────────────────────────────────────────────────────
 function MembersPanel({session,showToast}){
   const{data:members,loading}=useTable("members")
   const{data:cells}=useTable("cells")
@@ -560,6 +830,8 @@ function MembersPanel({session,showToast}){
   const[pwModal,setPwModal]=useState(null)
   const[newPw,setNewPw]=useState("")
   const[search,setSearch]=useState("")
+  const[filterStatus,setFilterStatus]=useState("")
+  const[filterCell,setFilterCell]=useState("")
   const[cardModal,setCardModal]=useState(null)
   const[showFamilySearch,setShowFamilySearch]=useState(false)
   const[familyField,setFamilyField]=useState(null)
@@ -591,10 +863,8 @@ function MembersPanel({session,showToast}){
         await supabase.from("users").insert({member_id:newM.id,cpf:cpfNorm,password_hash:btoa64("123456"),name:form.name.trim().toUpperCase(),role:"member",cell_id:form.cell_id||null,active:true})
         if(form.spouse_name){const spouse=members.find(m=>m.name===form.spouse_name);if(spouse)await supabase.from("members").update({spouse_name:form.name}).eq("id",spouse.id)}
         showToast("Membro criado! Senha padrão: 123456")
-      }else if(newM){
-        showToast("Visitante cadastrado! (sem acesso ao sistema)")
-      }
-      await addLog(session,"create",`Membro criado: ${form.name}`)
+      }else{showToast("Visitante cadastrado!")}
+      await addLog(session,"create",`Cadastro criado: ${form.name}`)
     }
     setModal(false);setEditing(null);setForm(emptyForm)
   }
@@ -603,8 +873,8 @@ function MembersPanel({session,showToast}){
     if(session?.role!=="admin"){showToast("Apenas o gestor pode excluir","error");return}
     await supabase.from("users").delete().eq("member_id",deleteId)
     await supabase.from("members").delete().eq("id",deleteId)
-    await addLog(session,"delete","Membro removido")
-    showToast("Membro removido");setDeleteId(null)
+    await addLog(session,"delete","Cadastro removido")
+    showToast("Removido");setDeleteId(null)
   }
 
   async function resetPw(){
@@ -613,75 +883,79 @@ function MembersPanel({session,showToast}){
     showToast("Senha redefinida!");setPwModal(null);setNewPw("")
   }
 
-  async function toggleActive(m){
-    const{data:user}=await supabase.from("users").select("id,active").eq("member_id",m.id).single()
-    const isActive=user?.active!==false
-    await supabase.from("users").update({active:!isActive}).eq("member_id",m.id)
-    showToast(isActive?"Membro inativado!":"Membro reativado!")
-  }
-
-  const[filterStatus,setFilterStatus]=useState("")
-  const[filterCell,setFilterCell]=useState("")
   const filtered=members.filter(m=>{
     const matchSearch=m.name.toLowerCase().includes(search.toLowerCase())||(m.phone||"").includes(search)
     const matchStatus=!filterStatus||m.status===filterStatus
     const matchCell=!filterCell||(filterCell==="sem_celula"?!m.cell_id:m.cell_id===filterCell)
     return matchSearch&&matchStatus&&matchCell
   })
+
   const cOpts=[{value:"",label:"— Sem célula —"},...cells.map(c=>({value:c.id,label:c.name}))]
+  const totalMembers=members.filter(m=>m.status==="Membro").length
+  const totalVisitors=members.filter(m=>m.status==="Visitante").length
 
   return(
     <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Membros <span style={{fontSize:13,color:"#94a3b8",fontWeight:600}}>({members.filter(m=>m.status==="Membro").length} membros, {members.filter(m=>m.status==="Visitante").length} visitantes)</span></h2>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div>
+          <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:"0 0 2px"}}>Pessoas</h2>
+          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{totalMembers} membros • {totalVisitors} visitantes</p>
+        </div>
         <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Novo</Btn>
       </div>
-      <div style={{position:"relative",marginBottom:8}}>
+
+      <div style={{position:"relative",marginBottom:10}}>
         <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",pointerEvents:"none"}}><Icon name="search" size={15}/></div>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nome ou telefone..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px 10px 36px",fontSize:14,outline:"none"}}/>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nome ou telefone..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"10px 14px 10px 36px",fontSize:14,outline:"none",background:"#fff"}}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:13,fontFamily:"'Outfit',sans-serif",outline:"none",background:"#fff",color:"#334155"}}>
-          <option value="">Todos os status</option>
-          <option value="Membro">Membros</option>
-          <option value="Visitante">Visitantes</option>
-        </select>
-        <select value={filterCell} onChange={e=>setFilterCell(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:13,fontFamily:"'Outfit',sans-serif",outline:"none",background:"#fff",color:"#334155"}}>
+
+      <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+        {[["","Todos"],["Membro","Membros"],["Visitante","Visitantes"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setFilterStatus(v)} style={{padding:"6px 14px",borderRadius:20,fontSize:12,fontWeight:700,border:`1.5px solid ${filterStatus===v?C.primary:"#e2e8f0"}`,background:filterStatus===v?C.primary:"#fff",color:filterStatus===v?"#fff":"#64748b",cursor:"pointer"}}>
+            {l}
+          </button>
+        ))}
+        <select value={filterCell} onChange={e=>setFilterCell(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,outline:"none",background:"#fff",color:filterCell?"#1B4F8A":"#64748b",cursor:"pointer"}}>
           <option value="">Todas as células</option>
           {cells.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           <option value="sem_celula">Sem célula</option>
         </select>
       </div>
+
       {loading&&<Loader/>}
-      {!loading&&filtered.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhum encontrado</p></Card>}
-      {filtered.map(m=>{
-        const cell=cells.find(c=>c.id===m.cell_id)
-        const sc=m.status==="Membro"?"#059669":"#2563eb"
-        return(
-          <Card key={m.id} style={{marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-              <Avatar name={m.name} photo={m.photo_url} size={40} color={sc}/>
+      {!loading&&filtered.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhum resultado</p></Card>}
+
+      <div style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",overflow:"hidden",boxShadow:"0 1px 6px rgba(0,0,0,0.06)"}}>
+        {filtered.map((m,i)=>{
+          const cell=cells.find(c=>c.id===m.cell_id)
+          const isMember=m.status==="Membro"
+          return(
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderTop:i>0?"1px solid #f1f5f9":"none",transition:"background 0.1s",cursor:"pointer"}}
+              onMouseOver={e=>e.currentTarget.style.background="#f8fafc"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+              <Avatar name={m.name} photo={m.photo_url} size={38} color={isMember?C.primary:C.gold}/>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
-                <div style={{fontSize:12,color:"#94a3b8"}}>{cell?.name||"Sem célula"} • {m.phone||"—"}</div>
+                <div style={{fontSize:14,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                <div style={{fontSize:11,color:"#94a3b8"}}>{cell?.name||"Sem célula"}{m.age?` • ${m.age} anos`:""}</div>
               </div>
-              <Badge label={m.status} color={sc}/>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                {m.phone?(
+                  <a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:8,padding:"3px 8px",display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:"#166534",textDecoration:"none"}}>
+                    <Icon name="whatsapp" size={11}/>{fmtPhone(m.phone)}
+                  </a>
+                ):<span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
+                <div style={{display:"flex",gap:4}}>
+                  <Badge label={m.status} color={isMember?C.primary:C.gold}/>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:4,marginLeft:4}}>
+                <button onClick={e=>{e.stopPropagation();setCardModal(m)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#64748b"}}><Icon name="id-card" size={13}/></button>
+                <button onClick={e=>{e.stopPropagation();openEdit(m)}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:C.primary}}><Icon name="edit" size={13}/></button>
+                {session?.role==="admin"&&<button onClick={e=>{e.stopPropagation();setDeleteId(m.id)}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:C.danger}}><Icon name="trash" size={13}/></button>}
+              </div>
             </div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-              {m.baptized&&<Badge label="✓ Batizado" color="#d97706"/>}
-              {m.age&&<span style={{fontSize:11,color:"#94a3b8"}}>{m.age} anos</span>}
-              {!m.cpf&&<Badge label="Sem CPF" color="#94a3b8"/>}
-            </div>
-            <div style={{display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap"}}>
-              <button onClick={()=>setCardModal(m)} style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"5px 8px",cursor:"pointer",color:"#64748b",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="id-card" size={12}/>Carteirinha</button>
-              {session?.role==="admin"&&m.cpf&&<button onClick={()=>{setPwModal(m.id);setNewPw("")}} style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"5px 8px",cursor:"pointer",color:"#64748b",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="key" size={12}/>Senha</button>}
-              <button onClick={()=>openEdit(m)} style={{background:"#eff6ff",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#2563eb"}}><Icon name="edit" size={14}/></button>
-              {m.cpf&&<button onClick={()=>toggleActive(m)} style={{background:"#fef3c7",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#d97706"}}><Icon name="pause" size={14}/></button>}
-              {session?.role==="admin"&&<button onClick={()=>setDeleteId(m.id)} style={{background:"#fef2f2",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#dc2626"}}><Icon name="trash" size={14}/></button>}
-            </div>
-          </Card>
-        )
-      })}
+          )
+        })}
+      </div>
 
       <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Cadastro":"Novo Cadastro"}>
         <Inp label="Nome Completo" value={form.name} onChange={v=>f("name")(v.toUpperCase())} required/>
@@ -693,7 +967,7 @@ function MembersPanel({session,showToast}){
           <Inp label="Idade" value={form.age} onChange={f("age")} type="number" readOnly={!!form.birth_date}/>
         </div>
         <Sel label="Sexo" value={form.gender} onChange={f("gender")} options={["Masculino","Feminino"].map(s=>({value:s,label:s}))}/>
-        <Inp label="Telefone (WhatsApp)" value={form.phone} onChange={f("phone")} placeholder="(00) 00000-0000"/>
+        <Inp label="Telefone (WhatsApp)" value={form.phone} onChange={v=>f("phone")(fmtPhone(v))} placeholder="(00) 00000-0000"/>
         <Inp label="E-mail" type="email" value={form.email} onChange={f("email")}/>
         <Inp label="Bairro" value={form.neighborhood} onChange={v=>f("neighborhood")(v.toUpperCase())}/>
         <Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={cOpts}/>
@@ -702,19 +976,19 @@ function MembersPanel({session,showToast}){
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:"0.05em",textTransform:"uppercase"}}>Batismo</label>
           <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <button type="button" onClick={()=>f("baptized")(true)} style={{flex:1,padding:"8px",borderRadius:10,fontSize:13,fontWeight:700,border:`1.5px solid ${form.baptized?"#059669":"#e2e8f0"}`,background:form.baptized?"#dcfce7":"#f8fafc",color:form.baptized?"#166534":"#64748b",cursor:"pointer"}}>✓ Batizado</button>
-            <button type="button" onClick={()=>{f("baptized")(false);f("baptism_date")("")}} style={{flex:1,padding:"8px",borderRadius:10,fontSize:13,fontWeight:700,border:`1.5px solid ${!form.baptized?"#dc2626":"#e2e8f0"}`,background:!form.baptized?"#fee2e2":"#f8fafc",color:!form.baptized?"#991b1b":"#64748b",cursor:"pointer"}}>✗ Não batizado</button>
+            <button type="button" onClick={()=>f("baptized")(true)} style={{flex:1,padding:"9px",borderRadius:10,fontSize:13,fontWeight:700,border:`1.5px solid ${form.baptized?C.success:"#e2e8f0"}`,background:form.baptized?"#dcfce7":"#f8fafc",color:form.baptized?C.success:"#64748b",cursor:"pointer"}}>✓ Batizado</button>
+            <button type="button" onClick={()=>{f("baptized")(false);f("baptism_date")("")}} style={{flex:1,padding:"9px",borderRadius:10,fontSize:13,fontWeight:700,border:`1.5px solid ${!form.baptized?C.danger:"#e2e8f0"}`,background:!form.baptized?"#fee2e2":"#f8fafc",color:!form.baptized?C.danger:"#64748b",cursor:"pointer"}}>✗ Não batizado</button>
           </div>
           {form.baptized&&<Inp label="Data do Batismo (opcional)" type="date" value={form.baptism_date} onChange={f("baptism_date")}/>}
         </div>
-        <div style={{borderTop:"1.5px solid #f1f5f9",margin:"8px 0",paddingTop:10}}>
+        <div style={{borderTop:"1px solid #f1f5f9",margin:"8px 0",paddingTop:12}}>
           <p style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:10,textTransform:"uppercase",letterSpacing:"0.05em"}}>Família</p>
           {[["father_name","Pai"],["mother_name","Mãe"],["spouse_name","Cônjuge"]].map(([field,label])=>(
             <div key={field} style={{marginBottom:14}}>
               <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}</label>
               <div style={{display:"flex",gap:8}}>
                 <input value={form[field]||""} onChange={e=>f(field)(e.target.value.toUpperCase())} placeholder={`Nome do ${label.toLowerCase()}`} style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
-                <button type="button" onClick={()=>{setFamilyField(field);setShowFamilySearch(true)}} style={{background:"#eff6ff",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:"#2563eb",display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
+                <button type="button" onClick={()=>{setFamilyField(field);setShowFamilySearch(true)}} style={{background:C.primary+"15",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.primary,display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
               </div>
             </div>
           ))}
@@ -723,7 +997,6 @@ function MembersPanel({session,showToast}){
       </Modal>
 
       <MemberSearchModal open={showFamilySearch} title="Buscar Familiar" members={members} onSelect={m=>setForm(p=>({...p,[familyField]:m.name}))} onClose={()=>setShowFamilySearch(false)}/>
-
       {cardModal&&<MemberCard member={cardModal} cells={cells} onClose={()=>setCardModal(null)}/>}
       {pwModal&&<Modal open title="Redefinir Senha" onClose={()=>setPwModal(null)}><Inp label="Nova Senha" type="password" value={newPw} onChange={setNewPw} placeholder="Mínimo 6 caracteres"/><Btn full onClick={resetPw}>Redefinir Senha</Btn></Modal>}
       {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}><p style={{color:"#64748b",marginBottom:16}}>Remover permanentemente?</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Btn variant="ghost" onClick={()=>setDeleteId(null)}>Cancelar</Btn><Btn variant="danger" onClick={del}>Excluir</Btn></div></Modal>}
@@ -733,21 +1006,23 @@ function MembersPanel({session,showToast}){
 
 function MemberCard({member,cells,onClose}){
   const cell=cells.find(c=>c.id===member.cell_id)
+  const leaders=cell?cells.find(c=>c.id===member.cell_id):null
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.8)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:340,overflow:"hidden"}}>
-        <div style={{background:"linear-gradient(135deg,#1e40af,#1e3a5f)",padding:"24px 20px",textAlign:"center"}}>
-          <div style={{margin:"0 auto 12px"}}><Avatar name={member.name} photo={member.photo_url} size={72} color="#7dd3fc"/></div>
-          <div style={{color:"#fff",fontSize:16,fontWeight:900,marginBottom:4}}>{member.name}</div>
-          <div style={{color:"#bfdbfe",fontSize:12}}>{member.status}</div>
+      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:340,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{background:`linear-gradient(135deg,${C.darker},${C.primary})`,padding:"28px 24px",textAlign:"center"}}>
+          <div style={{margin:"0 auto 14px"}}><Avatar name={member.name} photo={member.photo_url} size={80} color="rgba(255,255,255,0.2)"/></div>
+          <div style={{color:"#fff",fontSize:17,fontWeight:900,marginBottom:4}}>{member.name}</div>
+          <div style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{member.status}</div>
+          {member.phone&&<a href={whatsappLink(member.phone)} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"6px 14px",marginTop:10,color:"#fff",textDecoration:"none",fontSize:13,fontWeight:600}}><Icon name="whatsapp" size={14}/>{member.phone}</a>}
         </div>
-        <div style={{padding:"16px 20px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-            <div style={{textAlign:"center",background:"#f8fafc",borderRadius:10,padding:10}}><div style={{fontSize:11,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>Célula</div><div style={{fontSize:13,fontWeight:800,color:"#0f172a",marginTop:2}}>{cell?.name||"—"}</div></div>
-            <div style={{textAlign:"center",background:"#f8fafc",borderRadius:10,padding:10}}><div style={{fontSize:11,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>Status</div><div style={{fontSize:13,fontWeight:800,color:"#059669",marginTop:2}}>{member.status}</div></div>
+        <div style={{padding:"18px 20px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            <div style={{textAlign:"center",background:"#f8fafc",borderRadius:12,padding:12}}><div style={{fontSize:10,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:4}}>Célula</div><div style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>{cell?.name||"—"}</div></div>
+            <div style={{textAlign:"center",background:"#f8fafc",borderRadius:12,padding:12}}><div style={{fontSize:10,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:4}}>Status</div><div style={{fontSize:13,fontWeight:800,color:C.success}}>{member.status}</div></div>
           </div>
-          {member.baptized&&<div style={{background:"#fef3c7",borderRadius:10,padding:"8px 12px",marginBottom:12,textAlign:"center"}}><span style={{fontSize:13,fontWeight:700,color:"#92400e"}}>✓ Batizado{member.baptism_date?` em ${fmtDate(member.baptism_date)}`:""}</span></div>}
-          <div style={{fontSize:11,color:"#94a3b8",textAlign:"center",marginBottom:12}}>Promessa Lago dos Peixes</div>
+          {member.baptized&&<div style={{background:"#fef3c7",borderRadius:10,padding:"8px 14px",marginBottom:12,textAlign:"center"}}><span style={{fontSize:13,fontWeight:700,color:"#92400e"}}>✓ Batizado{member.baptism_date?` em ${fmtDate(member.baptism_date)}`:""}</span></div>}
+          <div style={{fontSize:11,color:"#94a3b8",textAlign:"center",marginBottom:14}}>Promessa Lago dos Peixes</div>
           <Btn full variant="ghost" onClick={onClose}>Fechar</Btn>
         </div>
       </div>
@@ -755,204 +1030,338 @@ function MemberCard({member,cells,onClose}){
   )
 }
 
-function AttendancePanel({session,showToast}){
+// ─── MEETINGS PANEL ───────────────────────────────────────────────────────────
+function MeetingsPanel({session,showToast}){
+  const{data:meetings,loading}=useTable("meetings")
   const{data:cells}=useTable("cells")
   const{data:members}=useTable("members")
-  const{data:allAtt}=useTable("attendance")
-  const[cellId,setCellId]=useState("")
-  const[date,setDate]=useState(todayStr())
-  const[theme,setTheme]=useState("")
-  const[preacher,setPreacher]=useState("")
-  const[songs,setSongs]=useState("")
-  const[photosLink,setPhotosLink]=useState("")
-  const[marks,setMarks]=useState({})
-  const[saving,setSaving]=useState(false)
+  const{data:attendance}=useTable("attendance")
+  const{data:comments}=useTable("meeting_comments")
+  const[modal,setModal]=useState(false)
+  const[editing,setEditing]=useState(null)
+  const[attModal,setAttModal]=useState(null)
   const[commentsModal,setCommentsModal]=useState(null)
+  const[editAttModal,setEditAttModal]=useState(null)
   const[preacherSearch,setPreacherSearch]=useState(false)
-  const[editModal,setEditModal]=useState(null)
+  const[marks,setMarks]=useState({})
+  const[cellFilter,setCellFilter]=useState("")
 
-  const cellMembers=members.filter(m=>m.cell_id===cellId&&(m.status==="Membro"||m.status==="Visitante"))
-  const cellMembersOnly=members.filter(m=>m.cell_id===cellId&&m.status==="Membro")
-  const presentCount=Object.values(marks).filter(v=>v==="Presente").length
-  const pct=cellMembersOnly.length?Math.round(cellMembersOnly.filter(m=>marks[m.id]==="Presente").length/cellMembersOnly.length*100):0
+  const emptyForm={cell_id:"",date:todayStr(),theme:"",preacher:"",songs:"",photos_link:"",is_general:false}
+  const[form,setForm]=useState(emptyForm)
+  const f=k=>v=>setForm(p=>({...p,[k]:v}))
+
+  const myCells=session?.role==="admin"||session?.role==="supervisor"?cells:cells.filter(c=>c.id===session?.cell_id)
 
   async function save(){
-    if(!cellId||!date){showToast("Selecione célula e data","error");return}
-    setSaving(true)
-    const records=cellMembers.map(m=>({member_id:m.id,member_name:m.name,cell_id:cellId,date,theme,preacher,songs,photos_link:photosLink,status:marks[m.id]||"Ausente",recorded_by:session.id}))
-    const{error}=await supabase.from("attendance").insert(records)
-    if(error){showToast("Erro: "+error.message,"error");setSaving(false);return}
-    const cell=cells.find(c=>c.id===cellId)
-    if(cell?.auto_create_meetings){
-      const nextDate=getNextMeetingDate(cell.day)
-      await supabase.from("cells").update({next_meeting_date:nextDate}).eq("id",cellId)
+    if(!form.date){showToast("Data obrigatória","error");return}
+    if(!form.is_general&&!form.cell_id){showToast("Selecione a célula","error");return}
+    const payload={...form,cell_id:form.is_general?null:form.cell_id||null,created_by:session.id}
+    if(editing){
+      await supabase.from("meetings").update(payload).eq("id",editing)
+      showToast("Encontro atualizado!")
+    }else{
+      const{data:newMeeting}=await supabase.from("meetings").insert(payload).select().single()
+      if(newMeeting&&form.is_general){
+        // Auto update next meeting for all cells
+      }else if(newMeeting&&form.cell_id){
+        const cell=cells.find(c=>c.id===form.cell_id)
+        if(cell?.auto_create_meetings){
+          const nextDate=getNextMeetingDate(cell.day)
+          await supabase.from("cells").update({next_meeting_date:nextDate}).eq("id",form.cell_id)
+        }
+      }
+      showToast("Encontro criado!")
     }
-    await addLog(session,"create",`Presença registrada: ${date}`)
-    showToast("Presença salva!");setSaving(false);setMarks({})
-    setTheme("");setPreacher("");setSongs("");setPhotosLink("")
+    setModal(false);setEditing(null);setForm(emptyForm)
   }
 
-  const grouped={}
-  allAtt.filter(a=>a.cell_id===cellId).forEach(a=>{if(!grouped[a.date])grouped[a.date]=[];grouped[a.date].push(a)})
-  const recentDates=Object.keys(grouped).sort().reverse().slice(0,5)
+  async function saveAttendance(meetingId,cellId,isGeneral){
+    const targetMembers=isGeneral?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===cellId&&(m.status==="Membro"||m.status==="Visitante"))
+    const records=targetMembers.map(m=>({member_id:m.id,member_name:m.name,cell_id:cellId,date:attModal.date,theme:attModal.theme,preacher:attModal.preacher,songs:attModal.songs,photos_link:attModal.photos_link,status:marks[m.id]||"Ausente",recorded_by:session.id}))
+    if(records.length>0){
+      await supabase.from("attendance").insert(records)
+      showToast("Presença registrada!")
+    }
+    setAttModal(null);setMarks({})
+  }
 
-  // Filter cells based on role
-  const myCells=session?.role==="admin"||session?.role==="supervisor"?cells:cells.filter(c=>c.id===session?.cell_id)
+  const filteredMeetings=meetings.filter(m=>!cellFilter||m.cell_id===cellFilter||m.is_general)
 
   return(
     <div>
-      <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Registrar Presença</h2>
-      <Card style={{marginBottom:14}}>
-        <Sel label="Célula" value={cellId} onChange={v=>{setCellId(v);setMarks({})}} options={[{value:"",label:"Selecione a célula..."},...myCells.filter(c=>c.active!==false).map(c=>({value:c.id,label:`${c.name}${c.next_meeting_date?` • próx: ${fmtDate(c.next_meeting_date)}`:""}`}))]}/>
-        <Inp label="Data do Encontro" type="date" value={date} onChange={setDate}/>
-        <Inp label="Tema da Palavra" value={theme} onChange={setTheme} placeholder="Tema do encontro"/>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Encontros</h2>
+        <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Novo</Btn>
+      </div>
+
+      <select value={cellFilter} onChange={e=>setCellFilter(e.target.value)} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"10px 14px",fontSize:13,outline:"none",background:"#fff",marginBottom:14}}>
+        <option value="">Todas as células</option>
+        {myCells.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+
+      {loading&&<Loader/>}
+      {!loading&&filteredMeetings.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhum encontro registrado</p></Card>}
+
+      {filteredMeetings.map(meeting=>{
+        const cell=cells.find(c=>c.id===meeting.cell_id)
+        const meetingAtt=attendance.filter(a=>a.date===meeting.date&&(meeting.is_general||a.cell_id===meeting.cell_id))
+        const present=meetingAtt.filter(a=>a.status==="Presente").length
+        const total=meetingAtt.length
+        const meetingComments=comments.filter(c=>c.attendance_date===meeting.date&&(meeting.is_general||c.cell_id===meeting.cell_id))
+        return(
+          <Card key={meeting.id} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                  <span style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{fmtDate(meeting.date)}</span>
+                  {meeting.is_general&&<Badge label="Celulão" color={C.gold}/>}
+                  {cell&&<Badge label={cell.name} color={C.primary}/>}
+                </div>
+                {meeting.theme&&<div style={{fontSize:12,color:"#64748b"}}>📖 {meeting.theme}</div>}
+                {meeting.preacher&&<div style={{fontSize:12,color:"#64748b"}}>🎤 {meeting.preacher}</div>}
+                {meeting.songs&&<div style={{fontSize:12,color:"#64748b"}}>🎵 {meeting.songs}</div>}
+              </div>
+              <div style={{display:"flex",gap:5,flexDirection:"column",alignItems:"flex-end"}}>
+                {total>0&&<div style={{display:"flex",gap:4}}><Badge label={`✓ ${present}`} color={C.success}/><Badge label={`✗ ${total-present}`} color={C.danger}/></div>}
+                {meeting.photos_link&&<a href={meeting.photos_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.primary,fontWeight:600,display:"flex",alignItems:"center",gap:3,textDecoration:"none"}}><Icon name="link" size={11}/>Fotos</a>}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <button onClick={()=>{setAttModal(meeting);setMarks({})}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.primary,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="check-circle" size={12}/>{total>0?"Ver Presença":"Registrar Presença"}</button>
+              <button onClick={()=>setCommentsModal(meeting)} style={{background:"#f0fdf4",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.success,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="comment" size={12}/>Comentários {meetingComments.length>0&&`(${meetingComments.length})`}</button>
+              {total>0&&<button onClick={()=>setEditAttModal({meeting,items:meetingAtt})} style={{background:"#fef3c7",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.warning,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="edit" size={12}/>Editar</button>}
+              <button onClick={()=>{setForm({cell_id:meeting.cell_id||"",date:meeting.date,theme:meeting.theme||"",preacher:meeting.preacher||"",songs:meeting.songs||"",photos_link:meeting.photos_link||"",is_general:meeting.is_general||false});setEditing(meeting.id);setModal(true)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"#64748b",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="edit" size={12}/>Dados</button>
+            </div>
+          </Card>
+        )
+      })}
+
+      <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Encontro":"Novo Encontro"}>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:form.is_general?C.gold+"10":"#f8fafc",border:`1.5px solid ${form.is_general?C.gold:"#e2e8f0"}`,borderRadius:12,padding:12}}>
+            <input type="checkbox" checked={form.is_general} onChange={e=>f("is_general")(e.target.checked)} style={{width:16,height:16,accentColor:C.gold}}/>
+            <span style={{fontSize:13,fontWeight:700,color:form.is_general?C.gold:"#334155"}}>🔥 Celulão — Encontro Geral de Todas as Células</span>
+          </label>
+        </div>
+        {!form.is_general&&<Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"Selecione..."},...myCells.map(c=>({value:c.id,label:c.name}))]} required/>}
+        <Inp label="Data" type="date" value={form.date} onChange={f("date")} required/>
+        <Inp label="Tema da Palavra" value={form.theme} onChange={f("theme")} placeholder="Tema do encontro"/>
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Quem passou a Palavra</label>
           <div style={{display:"flex",gap:8}}>
-            <input value={preacher} onChange={e=>setPreacher(e.target.value)} placeholder="Nome do pregador" style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
-            <button type="button" onClick={()=>setPreacherSearch(true)} style={{background:"#eff6ff",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:"#2563eb",display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
+            <input value={form.preacher} onChange={e=>f("preacher")(e.target.value)} placeholder="Nome do pregador" style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
+            <button type="button" onClick={()=>setPreacherSearch(true)} style={{background:C.primary+"15",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.primary,display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
           </div>
         </div>
-        <Textarea label="Músicas Cantadas" value={songs} onChange={setSongs} placeholder="Liste as músicas..." rows={2}/>
-        <Inp label="Link das Fotos" value={photosLink} onChange={setPhotosLink} placeholder="https://..."/>
-      </Card>
+        <Textarea label="Músicas Cantadas" value={form.songs} onChange={f("songs")} placeholder="Liste as músicas..." rows={2}/>
+        <Inp label="Link das Fotos" value={form.photos_link} onChange={f("photos_link")} placeholder="https://..."/>
+        <Btn full onClick={save}>{editing?"Salvar Alterações":"Criar Encontro"}</Btn>
+      </Modal>
 
-      {cellMembers.length>0&&(
-        <>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <span style={{fontSize:13,fontWeight:700,color:"#64748b"}}>Chamada ({cellMembers.length} membros)</span>
-            <span style={{fontSize:14,fontWeight:900,color:pct>=75?"#059669":pct>=50?"#d97706":"#dc2626"}}>{presentCount}/{cellMembers.length} • {pct}%</span>
-          </div>
-          {cellMembers.map(m=>{
-            const s=marks[m.id]
+      {attModal&&(
+        <Modal open title={`Presença — ${fmtDate(attModal.date)}${attModal.is_general?" (Celulão)":""}`} onClose={()=>{setAttModal(null);setMarks({})}}>
+          {(attModal.is_general?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===attModal.cell_id&&(m.status==="Membro"||m.status==="Visitante"))).map(m=>{
+            const existing=attendance.find(a=>a.date===attModal.date&&a.member_id===m.id)
+            const s=marks[m.id]||(existing?.status)||""
             return(
-              <Card key={m.id} style={{marginBottom:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                  <Avatar name={m.name} photo={m.photo_url} size={32} color="#2563eb"/>
-                  <span style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{m.name}</span>
+              <div key={m.id} style={{marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <Avatar name={m.name} size={28} color={C.primary}/>
+                  <span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{m.name}</span>
+                  {existing&&!marks[m.id]&&<Badge label={existing.status} color={existing.status==="Presente"?C.success:C.danger}/>}
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
                   {["Presente","Ausente","Justificado"].map(v=>(
-                    <button key={v} onClick={()=>setMarks(p=>({...p,[m.id]:v}))} style={{padding:"8px 4px",borderRadius:8,fontSize:12,fontWeight:700,border:`1.5px solid ${s===v?(v==="Presente"?"#059669":v==="Ausente"?"#dc2626":"#d97706"):"#e2e8f0"}`,background:s===v?(v==="Presente"?"#dcfce7":v==="Ausente"?"#fee2e2":"#fef3c7"):"#f8fafc",color:s===v?(v==="Presente"?"#166534":v==="Ausente"?"#991b1b":"#92400e"):"#64748b",cursor:"pointer"}}>
-                      {v==="Presente"?"✓ Presente":v==="Ausente"?"✗ Ausente":"? Justif."}
+                    <button key={v} onClick={()=>setMarks(p=>({...p,[m.id]:v}))} style={{padding:"7px 4px",borderRadius:8,fontSize:12,fontWeight:700,border:`1.5px solid ${s===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#e2e8f0"}`,background:s===v?(v==="Presente"?"#dcfce7":v==="Ausente"?"#fee2e2":"#fef3c7"):"#f8fafc",color:s===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#64748b",cursor:"pointer"}}>
+                      {v==="Presente"?"✓":v==="Ausente"?"✗":"?"} {v}
                     </button>
                   ))}
                 </div>
-              </Card>
+              </div>
             )
           })}
-          <Btn full onClick={save} disabled={saving} icon="check" style={{marginTop:12}}>{saving?"Salvando...":"Salvar Presença"}</Btn>
-        </>
+          {Object.keys(marks).length>0&&<Btn full onClick={()=>saveAttendance(attModal.id,attModal.cell_id,attModal.is_general)} style={{marginTop:12}} icon="check">Salvar Presença</Btn>}
+        </Modal>
       )}
 
-      {cellId&&cellMembers.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0,fontSize:13}}>Nenhum membro nesta célula</p></Card>}
-
-      {recentDates.length>0&&(
-        <div style={{marginTop:24}}>
-          <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>Histórico Recente</h3>
-          {recentDates.map(d=>{
-            const items=grouped[d];const p=items.filter(i=>i.status==="Presente").length;const item=items[0]
-            return(
-              <Card key={d} style={{marginBottom:8}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:800,color:"#334155"}}>{fmtDate(d)}</div>
-                    {item?.theme&&<div style={{fontSize:11,color:"#64748b",marginTop:2}}>📖 {item.theme}</div>}
-                    {item?.preacher&&<div style={{fontSize:11,color:"#64748b"}}>🎤 {item.preacher}</div>}
-                    {item?.songs&&<div style={{fontSize:11,color:"#64748b"}}>🎵 {item.songs}</div>}
-                  </div>
-                  <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}>
-                    <div style={{display:"flex",gap:4}}><Badge label={`✓ ${p}`} color="#059669"/><Badge label={`✗ ${items.length-p}`} color="#dc2626"/></div>
-                    {item?.photos_link&&<a href={item.photos_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#2563eb",fontWeight:600,display:"flex",alignItems:"center",gap:3,textDecoration:"none"}}><Icon name="link" size={11}/>Fotos</a>}
-                    <button onClick={()=>setCommentsModal({date:d,cellId})} style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:"#059669",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="comment" size={11}/>Comentários</button>
-                    <button onClick={()=>setEditModal({date:d,cellId,items:grouped[d]})} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:"#2563eb",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="edit" size={11}/>Editar</button>
-                  </div>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
-      <MemberSearchModal open={preacherSearch} title="Quem passou a Palavra?" members={members.filter(m=>m.cell_id===cellId||!cellId)} onSelect={m=>setPreacher(m.name)} onClose={()=>setPreacherSearch(false)}/>
-      {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cellId} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
-      {editModal&&<EditAttendanceModal date={editModal.date} cellId={editModal.cellId} items={editModal.items} showToast={showToast} onClose={()=>setEditModal(null)}/>}
+      {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cell_id} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
+      {editAttModal&&<EditAttendanceModal date={editAttModal.meeting.date} cellId={editAttModal.meeting.cell_id} items={editAttModal.items} showToast={showToast} onClose={()=>setEditAttModal(null)}/>}
+      <MemberSearchModal open={preacherSearch} title="Quem passou a Palavra?" members={members} onSelect={m=>f("preacher")(m.name)} onClose={()=>setPreacherSearch(false)}/>
     </div>
   )
 }
 
 function EditAttendanceModal({date,cellId,items,showToast,onClose}){
-  const[marks,setMarks]=useState(()=>{
-    const m={}
-    items.forEach(i=>{m[i.member_id]={status:i.status,id:i.id,name:i.member_name}})
-    return m
-  })
+  const[marks,setMarks]=useState(()=>{const m={};items.forEach(i=>{m[i.member_id]={status:i.status,id:i.id,name:i.member_name}});return m})
   const[saving,setSaving]=useState(false)
-
   async function save(){
     setSaving(true)
-    for(const[memberId,data] of Object.entries(marks)){
+    for(const[,data] of Object.entries(marks)){
       await supabase.from("attendance").update({status:data.status}).eq("id",data.id)
     }
-    showToast("Presença atualizada!")
-    setSaving(false)
-    onClose()
+    showToast("Presença atualizada!");setSaving(false);onClose()
   }
-
   return(
     <Modal open title={`Editar Presença • ${fmtDate(date)}`} onClose={onClose}>
-      <p style={{fontSize:12,color:"#64748b",marginBottom:14}}>Corrija a presença dos membros abaixo:</p>
       {Object.entries(marks).map(([memberId,data])=>(
         <div key={memberId} style={{marginBottom:12}}>
           <div style={{fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:6}}>{data.name}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
             {["Presente","Ausente","Justificado"].map(v=>(
-              <button key={v} onClick={()=>setMarks(p=>({...p,[memberId]:{...p[memberId],status:v}}))}
-                style={{padding:"8px 4px",borderRadius:8,fontSize:12,fontWeight:700,
-                  border:`1.5px solid ${data.status===v?(v==="Presente"?"#059669":v==="Ausente"?"#dc2626":"#d97706"):"#e2e8f0"}`,
-                  background:data.status===v?(v==="Presente"?"#dcfce7":v==="Ausente"?"#fee2e2":"#fef3c7"):"#f8fafc",
-                  color:data.status===v?(v==="Presente"?"#166534":v==="Ausente"?"#991b1b":"#92400e"):"#64748b",
-                  cursor:"pointer"}}>
-                {v==="Presente"?"✓ Presente":v==="Ausente"?"✗ Ausente":"? Justif."}
+              <button key={v} onClick={()=>setMarks(p=>({...p,[memberId]:{...p[memberId],status:v}}))} style={{padding:"7px 4px",borderRadius:8,fontSize:12,fontWeight:700,border:`1.5px solid ${data.status===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#e2e8f0"}`,background:data.status===v?(v==="Presente"?"#dcfce7":v==="Ausente"?"#fee2e2":"#fef3c7"):"#f8fafc",color:data.status===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#64748b",cursor:"pointer"}}>
+                {v==="Presente"?"✓":v==="Ausente"?"✗":"?"} {v}
               </button>
             ))}
           </div>
         </div>
       ))}
-      <Btn full onClick={save} disabled={saving} icon="check" style={{marginTop:8}}>
-        {saving?"Salvando...":"Salvar Alterações"}
-      </Btn>
+      <Btn full onClick={save} disabled={saving} icon="check" style={{marginTop:8}}>{saving?"Salvando...":"Salvar"}</Btn>
     </Modal>
   )
 }
 
 function CommentsModal({date,cellId,session,showToast,onClose}){
-  const{data:comments,reload}=useTable("meeting_comments",{col:"attendance_date",val:date})
-  const cellComments=comments.filter(c=>c.cell_id===cellId)
+  const{data:allComments,reload}=useTable("meeting_comments",{col:"attendance_date",val:date})
+  const cellComments=allComments.filter(c=>!cellId||c.cell_id===cellId)
   const[newComment,setNewComment]=useState("")
   const[reaction,setReaction]=useState("")
   async function addComment(){
     if(!newComment.trim()){showToast("Escreva um comentário","error");return}
-    await supabase.from("meeting_comments").insert({attendance_date:date,cell_id:cellId,member_id:session.member_id||null,member_name:session.name,comment:newComment.trim(),reaction})
+    await supabase.from("meeting_comments").insert({attendance_date:date,cell_id:cellId||null,member_id:session.member_id||null,member_name:session.name,comment:newComment.trim(),reaction})
     setNewComment("");setReaction("");reload();showToast("Comentário adicionado!")
   }
   return(
     <Modal open title={`Comentários • ${fmtDate(date)}`} onClose={onClose}>
-      <Textarea value={newComment} onChange={setNewComment} placeholder="Como foi o encontro? Compartilhe algo que te tocou..." rows={3}/>
-      <div style={{marginBottom:12}}>
+      <Textarea value={newComment} onChange={setNewComment} placeholder="Como foi o encontro? Compartilhe..." rows={3}/>
+      <div style={{marginBottom:14}}>
         <p style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.04em"}}>Reação</p>
-        <div style={{display:"flex",gap:8}}>{REACTIONS.map(r=>(<button key={r} onClick={()=>setReaction(r===reaction?"":r)} style={{fontSize:20,background:reaction===r?"#eff6ff":"#f8fafc",border:`1.5px solid ${reaction===r?"#2563eb":"#e2e8f0"}`,borderRadius:10,padding:"6px 10px",cursor:"pointer"}}>{r}</button>))}</div>
+        <div style={{display:"flex",gap:8}}>{REACTIONS.map(r=>(<button key={r} onClick={()=>setReaction(r===reaction?"":r)} style={{fontSize:22,background:reaction===r?C.primary+"10":"#f8fafc",border:`1.5px solid ${reaction===r?C.primary:"#e2e8f0"}`,borderRadius:12,padding:"7px 10px",cursor:"pointer"}}>{r}</button>))}</div>
       </div>
-      <Btn full onClick={addComment} icon="send" style={{marginBottom:16}}>Comentar</Btn>
-      <div style={{borderTop:"1.5px solid #f1f5f9",paddingTop:14}}>
-        <p style={{fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:10}}>{cellComments.length} comentário(s)</p>
+      <Btn full onClick={addComment} icon="send" style={{marginBottom:18}}>Comentar</Btn>
+      <div style={{borderTop:"1px solid #f1f5f9",paddingTop:14}}>
+        <p style={{fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:12}}>{cellComments.length} comentário(s)</p>
         {cellComments.length===0&&<p style={{color:"#94a3b8",fontSize:13,textAlign:"center"}}>Nenhum comentário ainda 😊</p>}
-        {cellComments.map(c=>(<div key={c.id} style={{background:"#f8fafc",borderRadius:12,padding:"10px 14px",marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{c.member_name}</span><div style={{display:"flex",alignItems:"center",gap:6}}>{c.reaction&&<span style={{fontSize:16}}>{c.reaction}</span>}<span style={{fontSize:11,color:"#94a3b8"}}>{new Date(c.created_at).toLocaleString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span></div></div><p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.5}}>{c.comment}</p></div>))}
+        {cellComments.map(c=>(
+          <div key={c.id} style={{background:"#f8fafc",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid #f1f5f9"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{c.member_name}</span>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>{c.reaction&&<span style={{fontSize:18}}>{c.reaction}</span>}<span style={{fontSize:11,color:"#94a3b8"}}>{new Date(c.created_at).toLocaleString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span></div>
+            </div>
+            <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.55}}>{c.comment}</p>
+          </div>
+        ))}
       </div>
     </Modal>
   )
 }
 
+// ─── PRAYER PANEL ─────────────────────────────────────────────────────────────
+function PrayerPanel({session,showToast}){
+  const{data:prayers,loading}=useTable("prayer_requests")
+  const{data:cells}=useTable("cells")
+  const{data:members}=useTable("members")
+  const[modal,setModal]=useState(false)
+  const[form,setForm]=useState({request:"",is_private:false,cell_id:""})
+
+  const canSeeAll=session?.role==="admin"||session?.role==="supervisor"
+  const visiblePrayers=prayers.filter(p=>{
+    if(canSeeAll)return true
+    if(p.is_private)return p.member_id===session.member_id
+    return p.cell_id===session.cell_id
+  })
+
+  async function createPrayer(){
+    if(!form.request.trim()){showToast("Descreva o pedido","error");return}
+    await supabase.from("prayer_requests").insert({request:form.request,is_private:form.is_private,cell_id:form.cell_id||session.cell_id||null,member_id:session.member_id||null,member_name:session.name,status:"pending"})
+    showToast("Pedido registrado! 🙏")
+    setModal(false);setForm({request:"",is_private:false,cell_id:""})
+  }
+
+  async function resolve(id){
+    await supabase.from("prayer_requests").update({status:"prayed",resolved_by:session.id,resolved_at:new Date().toISOString()}).eq("id",id)
+    showToast("Marcado como orado! 🙏")
+  }
+
+  const statusColor={pending:C.gold,prayed:C.success}
+  const statusLabel={pending:"Aguardando oração",prayed:"Orado ✓"}
+
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Pedidos de Oração 🙏</h2>
+        <Btn icon="plus" size="sm" onClick={()=>setModal(true)}>Novo Pedido</Btn>
+      </div>
+
+      <div style={{display:"flex",gap:6,marginBottom:14}}>
+        <div style={{background:`linear-gradient(135deg,${C.primary},#1a5fa8)`,borderRadius:12,padding:"12px 16px",flex:1,textAlign:"center",boxShadow:"0 2px 8px rgba(27,79,138,0.2)"}}>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{visiblePrayers.filter(p=>p.status==="pending").length}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>Pendentes</div>
+        </div>
+        <div style={{background:`linear-gradient(135deg,${C.success},#047857)`,borderRadius:12,padding:"12px 16px",flex:1,textAlign:"center",boxShadow:"0 2px 8px rgba(5,150,105,0.2)"}}>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{visiblePrayers.filter(p=>p.status==="prayed").length}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>Orados</div>
+        </div>
+      </div>
+
+      {loading&&<Loader/>}
+      {!loading&&visiblePrayers.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 20px"}}>
+          <div style={{fontSize:48,marginBottom:12}}>🙏</div>
+          <p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>Nenhum pedido de oração</p>
+          <p style={{color:"#cbd5e1",fontSize:12}}>Seja o primeiro a compartilhar um pedido</p>
+        </div>
+      )}
+
+      {visiblePrayers.map(p=>{
+        const cell=cells.find(c=>c.id===p.cell_id)
+        const isPending=p.status==="pending"
+        return(
+          <Card key={p.id} style={{marginBottom:10,borderLeft:`3px solid ${statusColor[p.status]||C.gold}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:C.purple+"15",display:"flex",alignItems:"center",justifyContent:"center",color:C.purple,flexShrink:0}}><Icon name="pray" size={16}/></div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{p.member_name}</div>
+                  <div style={{fontSize:11,color:"#94a3b8"}}>{cell?.name||"Geral"} • {fmtDate(p.created_at?.split("T")[0])}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                <Badge label={statusLabel[p.status]||p.status} color={statusColor[p.status]||C.gold}/>
+                {p.is_private&&<Badge label="🔒 Privado" color="#64748b"/>}
+              </div>
+            </div>
+            <p style={{fontSize:13,color:"#334155",margin:"0 0 10px",lineHeight:1.6,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.request}</p>
+            {isPending&&(session?.role==="admin"||session?.role==="leader"||session?.role==="secretary")&&(
+              <button onClick={()=>resolve(p.id)} style={{background:C.success+"15",border:`1px solid ${C.success}30`,borderRadius:8,padding:"6px 14px",cursor:"pointer",color:C.success,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                <Icon name="check" size={13}/>Marcar como Orado
+              </button>
+            )}
+          </Card>
+        )
+      })}
+
+      <Modal open={modal} onClose={()=>setModal(false)} title="Novo Pedido de Oração">
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:40}}>🙏</div>
+          <p style={{fontSize:13,color:"#64748b",margin:0}}>Compartilhe seu pedido com sua célula ou apenas com os líderes</p>
+        </div>
+        <Textarea label="Seu Pedido" value={form.request} onChange={v=>setForm(p=>({...p,request:v}))} placeholder="Descreva seu pedido de oração..." rows={4}/>
+        <div style={{marginBottom:16}}>
+          <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:form.is_private?"#f8fafc":"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:12,padding:12}}>
+            <input type="checkbox" checked={form.is_private} onChange={e=>setForm(p=>({...p,is_private:e.target.checked}))} style={{width:16,height:16,accentColor:C.primary}}/>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:"#334155"}}>🔒 Pedido Privado</div>
+              <div style={{fontSize:11,color:"#94a3b8"}}>Somente líderes e gestor poderão ver</div>
+            </div>
+          </label>
+        </div>
+        <Btn full onClick={createPrayer} variant="gold">Enviar Pedido 🙏</Btn>
+      </Modal>
+    </div>
+  )
+}
+
+// ─── EVENTS PANEL ─────────────────────────────────────────────────────────────
 function EventsPanel({session,showToast}){
   const{data:events,loading}=useTable("events")
   const{data:cells}=useTable("cells")
@@ -965,6 +1374,8 @@ function EventsPanel({session,showToast}){
   const emptyForm={title:"",description:"",date:"",time:"",location:"",cell_id:"",type:"Evento",photos_link:""}
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
+  const myCells=session?.role==="admin"||session?.role==="supervisor"?cells:cells.filter(c=>c.id===session?.cell_id)
+
   async function save(){
     if(!form.title||!form.date){showToast("Título e data obrigatórios","error");return}
     const payload={...form,cell_id:form.cell_id||null,created_by:session.id}
@@ -972,14 +1383,15 @@ function EventsPanel({session,showToast}){
     else{await supabase.from("events").insert(payload);showToast("Evento criado!")}
     setModal(false);setEditing(null);setForm(emptyForm)
   }
+
   async function saveAtt(eventId){
     const records=Object.entries(marks).map(([mid,status])=>({event_id:eventId,member_id:mid,member_name:members.find(m=>m.id===mid)?.name||"",status}))
     if(records.length>0)await supabase.from("event_attendance").insert(records)
     showToast("Presença salva!");setAttModal(null);setMarks({})
   }
-  const cOpts=[{value:"",label:"— Todos —"},...cells.map(c=>({value:c.id,label:c.name}))]
-  const eventTypes=["Evento","Culto","Retiro","Confraternização","Batismo","Outro"]
-  const myCells=session?.role==="admin"||session?.role==="supervisor"?cells:cells.filter(c=>c.id===session?.cell_id)
+
+  const typeColors={Evento:C.primary,Culto:C.gold,Retiro:C.success,Confraternização:"#e11d8c",Batismo:"#0891b2",Outro:"#64748b"}
+
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
@@ -991,42 +1403,49 @@ function EventsPanel({session,showToast}){
       {events.map(ev=>{
         const cell=cells.find(c=>c.id===ev.cell_id)
         const attCount=eventAtt.filter(a=>a.event_id===ev.id&&a.status==="Presente").length
-        return(<Card key={ev.id} style={{marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-            <div><div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{ev.title}</div><div style={{fontSize:12,color:"#64748b",marginTop:2}}>{fmtDate(ev.date)}{ev.time&&` às ${ev.time}`}</div>{ev.location&&<div style={{fontSize:12,color:"#64748b"}}>📍 {ev.location}</div>}{cell&&<div style={{fontSize:12,color:"#64748b"}}>🏠 {cell.name}</div>}</div>
-            <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}><Badge label={ev.type} color="#7c3aed"/>{attCount>0&&<Badge label={`✓ ${attCount}`} color="#059669"/>}</div>
-          </div>
-          {ev.description&&<p style={{fontSize:12,color:"#64748b",margin:"0 0 8px"}}>{ev.description}</p>}
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <button onClick={()=>{setAttModal(ev);setMarks({})}} style={{background:"#eff6ff",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"#2563eb",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="check-circle" size={12}/>Presença</button>
-            {ev.photos_link&&<a href={ev.photos_link} target="_blank" rel="noopener noreferrer" style={{background:"#f0fdf4",border:"none",borderRadius:8,padding:"5px 10px",color:"#059669",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4,textDecoration:"none"}}><Icon name="link" size={12}/>Fotos</a>}
-            <button onClick={()=>{setForm({title:ev.title,description:ev.description||"",date:ev.date,time:ev.time||"",location:ev.location||"",cell_id:ev.cell_id||"",type:ev.type,photos_link:ev.photos_link||""});setEditing(ev.id);setModal(true)}} style={{background:"#fef3c7",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"#d97706",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="edit" size={12}/>Editar</button>
-          </div>
-        </Card>)
+        const tColor=typeColors[ev.type]||C.primary
+        return(
+          <Card key={ev.id} style={{marginBottom:10,borderLeft:`3px solid ${tColor}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:4}}>{ev.title}</div>
+                <div style={{fontSize:12,color:"#64748b"}}>{fmtDate(ev.date)}{ev.time&&` às ${ev.time}`}</div>
+                {ev.location&&<div style={{fontSize:12,color:"#64748b"}}>📍 {ev.location}</div>}
+                {cell&&<div style={{fontSize:12,color:"#64748b"}}>🏠 {cell.name}</div>}
+              </div>
+              <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}>
+                <Badge label={ev.type} color={tColor}/>
+                {attCount>0&&<Badge label={`✓ ${attCount}`} color={C.success}/>}
+              </div>
+            </div>
+            {ev.description&&<p style={{fontSize:12,color:"#64748b",margin:"0 0 8px",lineHeight:1.5}}>{ev.description}</p>}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <button onClick={()=>{setAttModal(ev);setMarks({})}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.primary,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="check-circle" size={12}/>Presença</button>
+              {ev.photos_link&&<a href={ev.photos_link} target="_blank" rel="noopener noreferrer" style={{background:"#f0fdf4",border:"none",borderRadius:8,padding:"5px 10px",color:C.success,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4,textDecoration:"none"}}><Icon name="link" size={12}/>Fotos</a>}
+              <button onClick={()=>{setForm({title:ev.title,description:ev.description||"",date:ev.date,time:ev.time||"",location:ev.location||"",cell_id:ev.cell_id||"",type:ev.type,photos_link:ev.photos_link||""});setEditing(ev.id);setModal(true)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"#64748b",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="edit" size={12}/>Editar</button>
+            </div>
+          </Card>
+        )
       })}
       <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Evento":"Novo Evento"}>
         <Inp label="Título" value={form.title} onChange={f("title")} required placeholder="Nome do evento"/>
-        <Sel label="Tipo" value={form.type} onChange={f("type")} options={eventTypes.map(t=>({value:t,label:t}))}/>
+        <Sel label="Tipo" value={form.type} onChange={f("type")} options={["Evento","Culto","Retiro","Confraternização","Batismo","Outro"].map(t=>({value:t,label:t}))}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Data" type="date" value={form.date} onChange={f("date")} required/><Inp label="Horário" type="time" value={form.time} onChange={f("time")}/></div>
-        <Inp label="Local" value={form.location} onChange={f("location")} placeholder="Endereço ou nome do local"/>
+        <Inp label="Local" value={form.location} onChange={f("location")} placeholder="Endereço ou nome"/>
         <Sel label="Célula (opcional)" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"— Geral —"},...myCells.map(c=>({value:c.id,label:c.name}))]}/>
-        <Textarea label="Descrição" value={form.description} onChange={f("description")} placeholder="Detalhes do evento..."/>
+        <Textarea label="Descrição" value={form.description} onChange={f("description")} placeholder="Detalhes..."/>
         <Inp label="Link das Fotos" value={form.photos_link} onChange={f("photos_link")} placeholder="https://..."/>
         <Btn full onClick={save}>{editing?"Salvar Alterações":"Criar Evento"}</Btn>
       </Modal>
       {attModal&&(
         <Modal open title={`Presença — ${attModal.title}`} onClose={()=>{setAttModal(null);setMarks({})}}>
-          {(attModal.cell_id?members.filter(m=>m.cell_id===attModal.cell_id&&m.status==="Membro"):members.filter(m=>m.status==="Membro")).map(m=>{
+          {(attModal.cell_id?members.filter(m=>m.cell_id===attModal.cell_id&&(m.status==="Membro"||m.status==="Visitante")):members.filter(m=>m.status==="Membro")).map(m=>{
             const s=marks[m.id]
             return(
               <div key={m.id} style={{marginBottom:8}}>
                 <div style={{fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:6}}>{m.name}</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                  {["Presente","Ausente"].map(v=>(
-                    <button key={v} onClick={()=>setMarks(p=>({...p,[m.id]:v}))} style={{padding:"6px",borderRadius:8,fontSize:12,fontWeight:700,border:`1.5px solid ${s===v?(v==="Presente"?"#059669":"#dc2626"):"#e2e8f0"}`,background:s===v?(v==="Presente"?"#dcfce7":"#fee2e2"):"#f8fafc",color:s===v?(v==="Presente"?"#166634":"#991b1b"):"#64748b",cursor:"pointer"}}>
-                      {v==="Presente"?"✓ Presente":"✗ Ausente"}
-                    </button>
-                  ))}
+                  {["Presente","Ausente"].map(v=>(<button key={v} onClick={()=>setMarks(p=>({...p,[m.id]:v}))} style={{padding:"7px",borderRadius:8,fontSize:12,fontWeight:700,border:`1.5px solid ${s===v?(v==="Presente"?C.success:C.danger):"#e2e8f0"}`,background:s===v?(v==="Presente"?"#dcfce7":"#fee2e2"):"#f8fafc",color:s===v?(v==="Presente"?C.success:C.danger):"#64748b",cursor:"pointer"}}>{v==="Presente"?"✓ Presente":"✗ Ausente"}</button>))}
                 </div>
               </div>
             )
@@ -1038,7 +1457,7 @@ function EventsPanel({session,showToast}){
   )
 }
 
-function ReportsPanel(){
+function ReportsPanel({session}){
   const{data:members}=useTable("members")
   const{data:cells}=useTable("cells")
   const{data:attendance}=useTable("attendance")
@@ -1046,26 +1465,76 @@ function ReportsPanel(){
   const activeMembers=members.filter(m=>m.status==="Membro")
   const visitors=members.filter(m=>m.status==="Visitante")
   const baptized=members.filter(m=>m.baptized).length
-  const cellData=cells.map(c=>({name:c.name,count:members.filter(m=>m.cell_id===c.id&&m.status==="Membro").length,visitors:members.filter(m=>m.cell_id===c.id&&m.status==="Visitante").length,goal:c.growth_goal||0,active:c.active!==false})).sort((a,b)=>b.count-a.count)
   const currentMonth=getCurrentMonth()
   const birthdays=members.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
+  const cellData=cells.map(c=>({name:c.name,type:c.cell_type||"Adultos",count:members.filter(m=>m.cell_id===c.id&&m.status==="Membro").length,visitors:members.filter(m=>m.cell_id===c.id&&m.status==="Visitante").length,goal:c.growth_goal||0,active:c.cell_status!=="Inativa"})).sort((a,b)=>b.count-a.count)
   const genderData=activeMembers.reduce((a,m)=>{a[m.gender||"N/I"]=(a[m.gender||"N/I"]||0)+1;return a},{})
+  const typeData=activeMembers.reduce((a,m)=>{const cell=cells.find(c=>c.id===m.cell_id);const t=cell?.cell_type||"Sem célula";a[t]=(a[t]||0)+1;return a},{})
   const attByMember={}
   attendance.forEach(a=>{if(!attByMember[a.member_id])attByMember[a.member_id]={name:a.member_name,total:0,present:0};attByMember[a.member_id].total++;if(a.status==="Presente")attByMember[a.member_id].present++})
-  const attList=Object.values(attByMember).sort((a,b)=>(b.present/b.total||0)-(a.present/a.total||0)).slice(0,15)
+  const attList=Object.values(attByMember).sort((a,b)=>(b.present/b.total||0)-(a.present/a.total||0)).slice(0,20)
+
   return(
     <div>
       <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Relatórios</h2>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-        <Stat label="Membros" value={activeMembers.length} color="#2563eb" icon="users"/>
-        <Stat label="Visitantes" value={visitors.length} color="#7c3aed" icon="user-plus"/>
-        <Stat label="Batizados" value={baptized} color="#d97706" icon="check-circle"/>
-        <Stat label="Células" value={cells.filter(c=>c.active!==false).length} color="#059669" icon="grid"/>
+        <Stat label="Membros" value={activeMembers.length} color={C.primary} icon="users" sub={`+ ${visitors.length} visitantes`}/>
+        <Stat label="Batizados" value={baptized} color={C.gold} icon="check-circle"/>
+        <Stat label="Células Ativas" value={cells.filter(c=>c.cell_status!=="Inativa").length} color={C.success} icon="grid"/>
+        <Stat label="Encontros" value={[...new Set(attendance.map(a=>a.date))].length} color={C.purple} icon="calendar"/>
       </div>
-      {birthdays.length>0&&(<Card style={{marginBottom:12,border:"1.5px solid #fde68a",background:"#fffbeb"}}><h3 style={{fontSize:14,fontWeight:800,color:"#92400e",marginBottom:10}}>🎂 Aniversariantes do Mês</h3>{birthdays.map(m=>(<div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderTop:"1px solid #fde68a"}}><Avatar name={m.name} photo={m.photo_url} size={28} color="#d97706"/><div><div style={{fontSize:13,fontWeight:700,color:"#92400e"}}>{m.name}</div><div style={{fontSize:11,color:"#b45309"}}>{fmtDate(m.birth_date)}</div></div></div>))}</Card>)}
-      <Card style={{marginBottom:12}}><h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>🎯 Meta por Célula</h3>{cellData.map(({name,count,visitors,goal,active})=>(<div key={name} style={{marginBottom:12,opacity:active?1:0.5}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,fontWeight:700,color:"#334155"}}>{name}{!active&&" (inativa)"}</span><span style={{fontSize:12,color:"#64748b"}}>{count} membros{visitors>0?` + ${visitors} visit.`:""}{goal>0?`/${goal}`:""}</span></div>{goal>0?<ProgressBar value={count} max={goal} color="#2563eb"/>:<div style={{height:8,background:"#f1f5f9",borderRadius:4}}/>}</div>))}</Card>
-      <Card style={{marginBottom:12}}><h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Por Sexo (membros)</h3>{Object.entries(genderData).map(([k,v])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:"#334155",minWidth:90}}>{k}</span><Bar value={v} max={activeMembers.length} color="#2563eb"/><span style={{fontSize:12,fontWeight:700,color:"#2563eb",minWidth:24,textAlign:"right"}}>{v}</span></div>))}</Card>
-      {attList.length>0&&(<Card><h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Frequência Individual</h3>{attList.map(({name,total,present})=>{const pct=Math.round(present/total*100);const color=pct>=75?"#059669":pct>=50?"#d97706":"#dc2626";return(<div key={name} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,fontWeight:600,color:"#334155",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</span><span style={{fontSize:12,fontWeight:800,color,marginLeft:8}}>{pct}%</span></div><div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{height:6,background:"#f1f5f9",borderRadius:3,overflow:"hidden",flex:1}}><div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:3}}/></div><span style={{fontSize:10,color:"#94a3b8",flexShrink:0}}>{present}/{total}</span></div></div>)})}</Card>)}
+
+      {birthdays.length>0&&(
+        <Card style={{marginBottom:14,border:"1px solid #fde68a",background:"#fffbeb"}}>
+          <h3 style={{fontSize:14,fontWeight:800,color:"#92400e",marginBottom:12}}>🎂 Aniversariantes do Mês</h3>
+          {birthdays.map(m=>(
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:"1px solid #fde68a"}}>
+              <Avatar name={m.name} photo={m.photo_url} size={30} color={C.gold}/>
+              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#92400e"}}>{m.name}</div><div style={{fontSize:11,color:"#b45309"}}>{fmtDate(m.birth_date)}{m.age?` • vai completar ${m.age+1} anos`:""}</div></div>
+              {m.phone&&<a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:8,padding:"4px 8px",display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:"#166534",textDecoration:"none"}}><Icon name="whatsapp" size={11}/>Parabéns</a>}
+            </div>
+          ))}
+        </Card>
+      )}
+
+      <Card style={{marginBottom:14}}>
+        <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:14}}>🎯 Meta por Célula</h3>
+        {cellData.map(({name,type,count,visitors,goal,active})=>(
+          <div key={name} style={{marginBottom:14,opacity:active?1:0.5}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,alignItems:"center"}}>
+              <div><span style={{fontSize:13,fontWeight:700,color:"#334155"}}>{name}</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:6}}>{type}</span></div>
+              <span style={{fontSize:12,color:"#64748b"}}>{count} mbr{visitors>0?` + ${visitors} vis.`:""}  {goal>0?`/ ${goal}`:""}</span>
+            </div>
+            {goal>0?<ProgressBar value={count} max={goal} color={C.primary} showLabel={false}/>:<div style={{height:6,background:"#f1f5f9",borderRadius:3}}/>}
+          </div>
+        ))}
+      </Card>
+
+      <Card style={{marginBottom:14}}>
+        <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Por Sexo</h3>
+        {Object.entries(genderData).map(([k,v])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:"#334155",minWidth:80}}>{k}</span><Bar value={v} max={activeMembers.length} color={C.primary}/><span style={{fontSize:12,fontWeight:700,color:C.primary,minWidth:24,textAlign:"right"}}>{v}</span></div>))}
+      </Card>
+
+      <Card style={{marginBottom:14}}>
+        <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Por Tipo de Célula</h3>
+        {Object.entries(typeData).map(([k,v])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:"#334155",minWidth:100}}>{k}</span><Bar value={v} max={activeMembers.length} color={C.gold}/><span style={{fontSize:12,fontWeight:700,color:C.gold,minWidth:24,textAlign:"right"}}>{v}</span></div>))}
+      </Card>
+
+      {attList.length>0&&(
+        <Card>
+          <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:14}}>Frequência Individual</h3>
+          {attList.map(({name,total,present})=>{
+            const pct=Math.round(present/total*100)
+            const color=pct>=75?C.success:pct>=50?C.warning:C.danger
+            return(
+              <div key={name} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,fontWeight:600,color:"#334155",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</span><span style={{fontSize:12,fontWeight:800,color,marginLeft:8}}>{pct}%</span></div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{height:6,background:"#f1f5f9",borderRadius:3,overflow:"hidden",flex:1}}><div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:3}}/></div><span style={{fontSize:10,color:"#94a3b8",flexShrink:0}}>{present}/{total}</span></div>
+              </div>
+            )
+          })}
+        </Card>
+      )}
     </div>
   )
 }
@@ -1098,22 +1567,35 @@ function MessagesPanel({session,showToast}){
   return(
     <div>
       <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Mensagens</h2>
-      <Card style={{marginBottom:14}}>
+      <Card style={{marginBottom:16}}>
         <Sel label="Enviar para" value={form.target_type} onChange={f("target_type")} options={targetOptions}/>
         {form.target_type==="cell"&&<Sel label="Célula" value={form.target_cell_id} onChange={f("target_cell_id")} options={[{value:"",label:"Selecione..."},...myCells.map(c=>({value:c.id,label:c.name}))]}/>}
         {form.target_type==="role"&&<Sel label="Função" value={form.target_role} onChange={f("target_role")} options={roleOptions}/>}
-        <Inp label="Título" value={form.title} onChange={f("title")} placeholder="Ex: Encontro desta semana" required/>
-        <Textarea label="Mensagem" value={form.body} onChange={f("body")} placeholder="Escreva a mensagem..." rows={4}/>
+        <Inp label="Título" value={form.title} onChange={f("title")} placeholder="Ex: Lembrete do encontro" required/>
+        <Textarea label="Mensagem" value={form.body} onChange={f("body")} placeholder="Escreva aqui..." rows={4}/>
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:"0.05em",textTransform:"uppercase"}}>Canais</label>
-          <div style={{display:"flex",gap:8}}>{["sms","whatsapp","email"].map(ch=>(<button key={ch} onClick={()=>setForm(p=>({...p,channels:{...p.channels,[ch]:!p.channels[ch]}}))} style={{flex:1,padding:"10px 6px",borderRadius:10,border:`1.5px solid ${form.channels[ch]?"#2563eb":"#e2e8f0"}`,background:form.channels[ch]?"#eff6ff":"#f8fafc",color:form.channels[ch]?"#1e40af":"#94a3b8",fontSize:12,fontWeight:700,cursor:"pointer"}}>{ch==="sms"?"📱 SMS":ch==="whatsapp"?"💬 WhatsApp":"📧 E-mail"}</button>))}</div>
+          <div style={{display:"flex",gap:8}}>{["sms","whatsapp","email"].map(ch=>(<button key={ch} onClick={()=>setForm(p=>({...p,channels:{...p.channels,[ch]:!p.channels[ch]}}))} style={{flex:1,padding:"10px 6px",borderRadius:12,border:`1.5px solid ${form.channels[ch]?C.primary:"#e2e8f0"}`,background:form.channels[ch]?C.primary+"10":"#f8fafc",color:form.channels[ch]?C.primary:"#94a3b8",fontSize:12,fontWeight:700,cursor:"pointer"}}>{ch==="sms"?"📱 SMS":ch==="whatsapp"?"💬 WhatsApp":"📧 E-mail"}</button>))}</div>
         </div>
-        {getTargetCount()>0&&<div style={{background:"#eff6ff",borderRadius:10,padding:"8px 12px",marginBottom:12,fontSize:13,color:"#1e40af",fontWeight:600}}>📤 Para {getTargetCount()} pessoa(s)</div>}
+        {getTargetCount()>0&&<div style={{background:C.primary+"08",border:`1px solid ${C.primary}20`,borderRadius:12,padding:"10px 14px",marginBottom:12,fontSize:13,color:C.primary,fontWeight:600}}>📤 Para {getTargetCount()} pessoa(s)</div>}
         <Btn full icon="send" onClick={send}>Enviar Mensagem</Btn>
       </Card>
       <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>Histórico</h3>
-      {msgs.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhuma mensagem</p></Card>}
-      {msgs.map(m=>(<Card key={m.id} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>{m.title}</span><span style={{fontSize:11,color:"#94a3b8"}}>{fmtDate(m.created_at?.split("T")[0])}</span></div><p style={{fontSize:12,color:"#64748b",margin:"0 0 8px",lineHeight:1.5}}>{m.body}</p><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{m.channels?.map(c=><Badge key={c} label={c} color="#2563eb"/>)}<Badge label={`${m.target_count} pessoas`} color="#059669"/><Badge label={m.sent_by_name} color="#64748b"/></div></Card>))}
+      {msgs.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhuma mensagem enviada</p></Card>}
+      {msgs.map(m=>(
+        <Card key={m.id} style={{marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>{m.title}</span>
+            <span style={{fontSize:11,color:"#94a3b8"}}>{fmtDate(m.created_at?.split("T")[0])}</span>
+          </div>
+          <p style={{fontSize:12,color:"#64748b",margin:"0 0 8px",lineHeight:1.5}}>{m.body}</p>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {m.channels?.map(c=><Badge key={c} label={c} color={C.primary}/>)}
+            <Badge label={`${m.target_count} pessoas`} color={C.success}/>
+            <Badge label={m.sent_by_name} color="#64748b"/>
+          </div>
+        </Card>
+      ))}
     </div>
   )
 }
@@ -1129,10 +1611,10 @@ function AllRequestsPanel({session,showToast}){
   const[form,setForm]=useState({member_id:"",reason:""})
   const[cellForm,setCellForm]=useState({cell_id:"",field_name:"",requested_value:"",reason:""})
   const canResolve=session?.role==="admin"||session?.role==="supervisor"
-  const sc={pending:"#d97706",approved:"#059669",rejected:"#dc2626"}
+  const sc={pending:C.warning,approved:C.success,rejected:C.danger}
   const sl={pending:"Pendente",approved:"Aprovado",rejected:"Rejeitado"}
 
-  async function createInactReq(){
+  async function createInact(){
     if(!form.member_id||!form.reason){showToast("Preencha todos os campos","error");return}
     const member=members.find(m=>m.id===form.member_id)
     await supabase.from("inactivation_requests").insert({member_id:form.member_id,member_name:member?.name||"",cell_id:member?.cell_id||null,reason:form.reason,requested_by:session.id,requested_by_name:session.name,status:"pending"})
@@ -1148,7 +1630,7 @@ function AllRequestsPanel({session,showToast}){
 
   async function resolveInact(id,status){
     await supabase.from("inactivation_requests").update({status,resolved_by:session.id,resolved_at:new Date().toISOString()}).eq("id",id)
-    if(status==="approved"){const req=inactReqs.find(r=>r.id===id);if(req){await supabase.from("members").update({status:"Membro"}).eq("id",req.member_id);await supabase.from("users").update({active:false}).eq("member_id",req.member_id)}}
+    if(status==="approved"){const req=inactReqs.find(r=>r.id===id);if(req){await supabase.from("users").update({active:false}).eq("member_id",req.member_id)}}
     showToast(status==="approved"?"Aprovado! Membro inativado.":"Rejeitado")
   }
 
@@ -1157,10 +1639,10 @@ function AllRequestsPanel({session,showToast}){
     showToast(status==="approved"?"Aprovado!":"Rejeitado")
   }
 
-  const mOpts=[{value:"",label:"Selecione o membro..."},...members.filter(m=>m.status==="Membro").map(m=>({value:m.id,label:m.name}))]
+  const mOpts=[{value:"",label:"Selecione..."},...members.filter(m=>m.status==="Membro").map(m=>({value:m.id,label:m.name}))]
   const myCells=session?.role==="admin"?cells:cells.filter(c=>c.id===session?.cell_id)
   const cellOpts=[{value:"",label:"Selecione a célula..."},...myCells.map(c=>({value:c.id,label:c.name}))]
-  const fieldOpts=[{value:"",label:"Selecione o campo..."},{value:"Endereço",label:"Endereço"},{value:"Horário",label:"Horário"},{value:"Dia da semana",label:"Dia da semana"},{value:"Anfitrião",label:"Anfitrião"},{value:"Outro",label:"Outro"}]
+  const fieldOpts=[{value:"",label:"Selecione..."},{value:"Endereço",label:"Endereço"},{value:"Horário",label:"Horário"},{value:"Dia da semana",label:"Dia da semana"},{value:"Anfitrião",label:"Anfitrião"},{value:"Outro",label:"Outro"}]
 
   return(
     <div>
@@ -1171,37 +1653,42 @@ function AllRequestsPanel({session,showToast}){
           <Btn icon="plus" size="sm" onClick={()=>setModal(true)}>Inativação</Btn>
         </div>
       </div>
-      <div style={{display:"flex",gap:4,marginBottom:14,background:"#f1f5f9",borderRadius:10,padding:4}}>
+      <div style={{display:"flex",gap:4,marginBottom:14,background:"#f1f5f9",borderRadius:12,padding:4}}>
         {[["inativacao","Inativações"],["celula","Alterações de Célula"]].map(([id,label])=>(
-          <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"8px",borderRadius:8,fontSize:13,fontWeight:700,border:"none",cursor:"pointer",background:tab===id?"#fff":"transparent",color:tab===id?"#0f172a":"#64748b"}}>{label}</button>
+          <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"8px",borderRadius:10,fontSize:13,fontWeight:700,border:"none",cursor:"pointer",background:tab===id?"#fff":"transparent",color:tab===id?"#0f172a":"#64748b",boxShadow:tab===id?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{label}</button>
         ))}
       </div>
-
       {tab==="inativacao"&&(
         <div>
           {inactReqs.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhuma solicitação</p></Card>}
-          {inactReqs.map(r=>(<Card key={r.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div><span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{r.member_name}</span><div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Por: {r.requested_by_name}</div></div><Badge label={sl[r.status]||r.status} color={sc[r.status]||"#64748b"}/></div><p style={{fontSize:12,color:"#64748b",margin:"0 0 8px"}}>Motivo: {r.reason}</p><div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>{fmtDate(r.created_at?.split("T")[0])}</div>{r.status==="pending"&&canResolve&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Btn variant="success" size="sm" onClick={()=>resolveInact(r.id,"approved")}>✓ Aprovar</Btn><Btn variant="danger" size="sm" onClick={()=>resolveInact(r.id,"rejected")}>✗ Rejeitar</Btn></div>)}</Card>))}
+          {inactReqs.map(r=>(<Card key={r.id} style={{marginBottom:10,borderLeft:`3px solid ${sc[r.status]||C.warning}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div><span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{r.member_name}</span><div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Por: {r.requested_by_name} • {fmtDate(r.created_at?.split("T")[0])}</div></div><Badge label={sl[r.status]||r.status} color={sc[r.status]||C.warning}/></div>
+            <p style={{fontSize:12,color:"#64748b",margin:"0 0 8px",background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}>Motivo: {r.reason}</p>
+            {r.status==="pending"&&canResolve&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Btn variant="success" size="sm" onClick={()=>resolveInact(r.id,"approved")}>✓ Aprovar</Btn><Btn variant="danger" size="sm" onClick={()=>resolveInact(r.id,"rejected")}>✗ Rejeitar</Btn></div>)}
+          </Card>))}
         </div>
       )}
-
       {tab==="celula"&&(
         <div>
           {cellReqs.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhuma solicitação</p></Card>}
-          {cellReqs.map(r=>(<Card key={r.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div><span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{r.cell_name}</span><div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Por: {r.requested_by_name}</div></div><Badge label={sl[r.status]||r.status} color={sc[r.status]||"#64748b"}/></div><p style={{fontSize:12,color:"#64748b",margin:"0 0 4px"}}>Campo: <b>{r.field_name}</b></p><p style={{fontSize:12,color:"#64748b",margin:"0 0 4px"}}>Novo valor: <b>{r.requested_value}</b></p>{r.reason&&<p style={{fontSize:12,color:"#64748b",margin:"0 0 8px"}}>Motivo: {r.reason}</p>}<div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>{fmtDate(r.created_at?.split("T")[0])}</div>{r.status==="pending"&&canResolve&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Btn variant="success" size="sm" onClick={()=>resolveCellReq(r.id,"approved")}>✓ Aprovar</Btn><Btn variant="danger" size="sm" onClick={()=>resolveCellReq(r.id,"rejected")}>✗ Rejeitar</Btn></div>)}</Card>))}
+          {cellReqs.map(r=>(<Card key={r.id} style={{marginBottom:10,borderLeft:`3px solid ${sc[r.status]||C.warning}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div><span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{r.cell_name}</span><div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Por: {r.requested_by_name} • {fmtDate(r.created_at?.split("T")[0])}</div></div><Badge label={sl[r.status]||r.status} color={sc[r.status]||C.warning}/></div>
+            <p style={{fontSize:12,color:"#64748b",margin:"0 0 4px"}}>Campo: <b>{r.field_name}</b></p>
+            <p style={{fontSize:12,color:"#64748b",margin:"0 0 8px",background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}>Novo valor: {r.requested_value}{r.reason?` — ${r.reason}`:""}</p>
+            {r.status==="pending"&&canResolve&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Btn variant="success" size="sm" onClick={()=>resolveCellReq(r.id,"approved")}>✓ Aprovar</Btn><Btn variant="danger" size="sm" onClick={()=>resolveCellReq(r.id,"rejected")}>✗ Rejeitar</Btn></div>)}
+          </Card>))}
         </div>
       )}
-
-      <Modal open={modal} onClose={()=>setModal(false)} title="Solicitar Inativação de Membro">
+      <Modal open={modal} onClose={()=>setModal(false)} title="Solicitar Inativação">
         <Sel label="Membro" value={form.member_id} onChange={v=>setForm(p=>({...p,member_id:v}))} options={mOpts}/>
         <Textarea label="Motivo" value={form.reason} onChange={v=>setForm(p=>({...p,reason:v}))} placeholder="Explique o motivo..."/>
-        <Btn full onClick={createInactReq}>Enviar Solicitação</Btn>
+        <Btn full onClick={createInact}>Enviar Solicitação</Btn>
       </Modal>
-
       <Modal open={cellModal} onClose={()=>setCellModal(false)} title="Solicitar Alteração na Célula">
         <Sel label="Célula" value={cellForm.cell_id} onChange={v=>setCellForm(p=>({...p,cell_id:v}))} options={cellOpts}/>
         <Sel label="Campo a alterar" value={cellForm.field_name} onChange={v=>setCellForm(p=>({...p,field_name:v}))} options={fieldOpts}/>
         <Inp label="Novo valor" value={cellForm.requested_value} onChange={v=>setCellForm(p=>({...p,requested_value:v}))} placeholder="Ex: Rua das Flores, 123"/>
-        <Textarea label="Motivo (opcional)" value={cellForm.reason} onChange={v=>setCellForm(p=>({...p,reason:v}))} placeholder="Explique o motivo..." rows={2}/>
+        <Textarea label="Motivo (opcional)" value={cellForm.reason} onChange={v=>setCellForm(p=>({...p,reason:v}))} rows={2}/>
         <Btn full onClick={createCellReq}>Enviar Solicitação</Btn>
       </Modal>
     </div>
@@ -1216,39 +1703,52 @@ function LogsPanel(){
       <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Auditoria</h2>
       {loading&&<Loader/>}
       {!loading&&logs.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhum registro</p></Card>}
-      {logs.map(log=>(<div key={log.id} style={{background:"#f8fafc",borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1.5px solid #f1f5f9"}}><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:2}}><span>{emoji[log.action]||"📝"}</span><span style={{fontSize:12,fontWeight:700,color:"#334155"}}>{log.detail}</span></div><span style={{fontSize:11,color:"#94a3b8"}}>{new Date(log.created_at).toLocaleString("pt-BR")}</span></div>))}
+      {logs.map(log=>(
+        <div key={log.id} style={{background:"#fff",borderRadius:12,padding:"10px 14px",marginBottom:6,border:"1px solid #e8edf2",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:16}}>{emoji[log.action]||"📝"}</span>
+          <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:"#334155"}}>{log.detail}</div><div style={{fontSize:11,color:"#94a3b8"}}>{new Date(log.created_at).toLocaleString("pt-BR")}</div></div>
+        </div>
+      ))}
     </div>
   )
 }
 
+// ─── LEADER/SECRETARY DASHBOARD ───────────────────────────────────────────────
 function LeaderSecretaryDashboard({session,logout,showToast}){
   const[sub,setSub]=useState("home")
   const[showChangePw,setShowChangePw]=useState(false)
   const{data:cells}=useTable("cells")
   const{data:members}=useTable("members")
-  const{data:attendance}=useTable("attendance")
+  const{data:meetings}=useTable("meetings")
+  const{data:prayers}=useTable("prayer_requests")
   const cell=cells.find(c=>c.id===session.cell_id)
   const cellMembers=members.filter(m=>m.cell_id===session.cell_id&&m.status==="Membro")
   const cellVisitors=members.filter(m=>m.cell_id===session.cell_id&&m.status==="Visitante")
-  const cellAtt=attendance.filter(a=>a.cell_id===session.cell_id)
-  const lastDate=[...new Set(cellAtt.map(a=>a.date))].sort().reverse()[0]
-  const presentCount=cellAtt.filter(a=>a.date===lastDate&&a.status==="Presente").length
+  const cellMeetings=meetings.filter(m=>m.cell_id===session.cell_id||m.is_general)
   const roleLabel=session.role==="secretary"?"Secretário":"Líder"
+  const leaders=cell?members.filter(m=>cell.leaders_ids?.includes(m.id)):[]
+
+  const currentMonth=getCurrentMonth()
+  const{start,end}=getCurrentWeekDates()
+  const weekBirthdays=members.filter(m=>m.cell_id===session.cell_id&&m.birth_date&&(()=>{const b=new Date(m.birth_date);const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate());return t>=start&&t<=end})())
+  const pendingPrayers=prayers.filter(p=>p.cell_id===session.cell_id&&p.status==="pending").length
 
   const menu=[
-    {id:"members",icon:"users",label:"Membros",desc:`${cellMembers.length} membros, ${cellVisitors.length} visitantes`,color:"#059669"},
-    {id:"attendance",icon:"check-circle",label:"Presença",desc:"Registrar encontro",color:"#2563eb"},
-    {id:"events",icon:"event",label:"Eventos",desc:"Gerenciar eventos",color:"#7c3aed"},
-    {id:"reports",icon:"bar-chart",label:"Relatórios",desc:"Frequência e dados",color:"#d97706"},
-    {id:"messages",icon:"message",label:"Mensagens",desc:"Enviar comunicados",color:"#0891b2"},
-    {id:"requests",icon:"inbox",label:"Solicitações",desc:"Inativações e alterações",color:"#dc2626"},
+    {id:"members",icon:"users",label:"Pessoas",desc:`${cellMembers.length} membros, ${cellVisitors.length} visitantes`,color:C.primary},
+    {id:"meetings",icon:"meeting",label:"Encontros",desc:"Registrar e gerenciar",color:C.success},
+    {id:"events",icon:"event",label:"Eventos",desc:"Gerenciar eventos",color:C.purple},
+    {id:"prayer",icon:"pray",label:"Orações",desc:`${pendingPrayers} pedido(s) pendente(s)`,color:"#7c3aed"},
+    {id:"reports",icon:"bar-chart",label:"Relatórios",desc:"Frequência e dados",color:C.gold},
+    {id:"messages",icon:"message",label:"Mensagens",desc:"Comunicados",color:"#0891b2"},
+    {id:"requests",icon:"inbox",label:"Solicitações",desc:"Inativações e alterações",color:C.danger},
   ]
 
   function renderSub(){
     if(sub==="members")return<MembersPanel session={session} showToast={showToast}/>
-    if(sub==="attendance")return<AttendancePanel session={session} showToast={showToast}/>
+    if(sub==="meetings")return<MeetingsPanel session={session} showToast={showToast}/>
     if(sub==="events")return<EventsPanel session={session} showToast={showToast}/>
-    if(sub==="reports")return<ReportsPanel/>
+    if(sub==="prayer")return<PrayerPanel session={session} showToast={showToast}/>
+    if(sub==="reports")return<ReportsPanel session={session}/>
     if(sub==="messages")return<MessagesPanel session={session} showToast={showToast}/>
     if(sub==="requests")return<AllRequestsPanel session={session} showToast={showToast}/>
     return null
@@ -1256,47 +1756,66 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
 
   return(
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-      <header style={{background:"#0f172a",padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div><div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>{cell?.name||"Minha Célula"}</div><div style={{color:"#7dd3fc",fontSize:12}}>{roleLabel} • {session.name}</div></div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"#cbd5e1",display:"flex"}}><Icon name="key" size={15}/></button>
-          <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"#cbd5e1",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:600}}><Icon name="log-out" size={15}/>Sair</button>
+      <header style={{background:`linear-gradient(135deg,${C.darker},${C.primary})`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <LogoIcon size={30}/>
+          <div><div style={{color:"#fff",fontSize:15,fontWeight:800}}>{cell?.name||"Minha Célula"}</div><div style={{color:"rgba(255,255,255,0.6)",fontSize:11}}>{roleLabel} • {session.name}</div></div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex"}}><Icon name="key" size={15}/></button>
+          <button onClick={logout} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Icon name="log-out" size={14}/>Sair</button>
         </div>
       </header>
       {sub==="home"?(
         <div style={{flex:1,padding:"16px 16px 80px"}}>
+          {weekBirthdays.length>0&&(
+            <div style={{background:`linear-gradient(135deg,${C.gold},#d4820f)`,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(232,146,26,0.3)"}}>
+              <div style={{fontSize:28}}>🎂</div>
+              <div><div style={{color:"#fff",fontSize:13,fontWeight:800,marginBottom:2}}>Aniversário esta semana!</div><div style={{color:"rgba(255,255,255,0.85)",fontSize:12}}>{weekBirthdays.map(m=>m.name.split(" ")[0]).join(", ")}</div></div>
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-            <Stat label="Membros" value={cellMembers.length} color="#059669" icon="users"/>
-            <Stat label="Presentes (últ.)" value={presentCount} color="#2563eb" icon="check-circle"/>
+            <Stat label="Membros" value={cellMembers.length} color={C.primary} icon="users" sub={cellVisitors.length>0?`+ ${cellVisitors.length} visitantes`:""}/>
+            <Stat label="Encontros" value={cellMeetings.length} color={C.gold} icon="meeting"/>
           </div>
           {cell?.growth_goal>0&&(
-            <Card style={{marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#334155",marginBottom:8}}>🎯 Meta de Crescimento</div>
-              <ProgressBar value={cellMembers.length} max={cell.growth_goal} color="#2563eb"/>
-              {cellVisitors.length>0&&<div style={{fontSize:11,color:"#7c3aed",marginTop:6}}>+ {cellVisitors.length} visitante(s) potencial(ais)</div>}
+            <Card style={{marginBottom:16,border:`1px solid ${C.primary}20`}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <div style={{background:C.primary+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="target" size={16} color={C.primary}/></div>
+                <span style={{fontSize:14,fontWeight:800,color:C.primary}}>Meta de Crescimento</span>
+              </div>
+              <ProgressBar value={cellMembers.length} max={cell.growth_goal} color={C.primary}/>
+              {cellVisitors.length>0&&<div style={{fontSize:11,color:C.purple,marginTop:8}}>🌱 {cellVisitors.length} visitante(s) — potencial de crescimento!</div>}
             </Card>
           )}
           {cell?.next_meeting_date&&(
-            <Card style={{marginBottom:16,border:"1.5px solid #bfdbfe",background:"#eff6ff"}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#1e40af"}}>📅 Próximo Encontro</div>
-              <div style={{fontSize:16,fontWeight:900,color:"#1e40af",marginTop:4}}>{fmtDate(cell.next_meeting_date)} às {cell.time}</div>
-              <div style={{fontSize:12,color:"#3b82f6",marginTop:2}}>{cell.frequency||"Semanal"} • {cell.neighborhood}</div>
+            <Card style={{marginBottom:16,border:`1px solid ${C.gold}30`,background:`${C.gold}05`}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{background:C.gold+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="calendar" size={16} color={C.gold}/></div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:C.gold}}>Próximo Encontro</div>
+                  <div style={{fontSize:15,fontWeight:900,color:"#0f172a"}}>{fmtDate(cell.next_meeting_date)} às {cell.time}</div>
+                  <div style={{fontSize:11,color:"#64748b"}}>{cell.frequency||"Semanal"} • {cell.neighborhood}</div>
+                </div>
+              </div>
             </Card>
           )}
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {menu.map(item=>(
-              <button key={item.id} onClick={()=>setSub(item.id)} style={{background:"#fff",borderRadius:16,border:"1.5px solid #f1f5f9",padding:"16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
-                <div style={{width:46,height:46,borderRadius:12,background:item.color+"15",display:"flex",alignItems:"center",justifyContent:"center",color:item.color,flexShrink:0}}><Icon name={item.icon} size={22}/></div>
+              <button key={item.id} onClick={()=>setSub(item.id)} style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",padding:"16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left",boxShadow:"0 1px 6px rgba(0,0,0,0.05)",transition:"all 0.15s"}}
+                onMouseOver={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseOut={e=>e.currentTarget.style.transform="translateY(0)"}>
+                <div style={{width:46,height:46,borderRadius:14,background:item.color+"15",display:"flex",alignItems:"center",justifyContent:"center",color:item.color,flexShrink:0}}><Icon name={item.icon} size={22}/></div>
                 <div><div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{item.label}</div><div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{item.desc}</div></div>
+                <div style={{marginLeft:"auto"}}><Icon name="chevron-right" size={16} color="#cbd5e1"/></div>
               </button>
             ))}
           </div>
         </div>
       ):(
         <div style={{flex:1,display:"flex",flexDirection:"column"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1.5px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"#fff"}}>
-            <button onClick={()=>setSub("home")} style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:6,cursor:"pointer",color:"#64748b",display:"flex"}}><Icon name="arrow-left" size={16}/></button>
-            <span style={{fontSize:16,fontWeight:800,color:"#0f172a"}}>{menu.find(i=>i.id===sub)?.label}</span>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+            <button onClick={()=>setSub("home")} style={{background:"#f1f5f9",border:"none",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"#64748b",display:"flex",alignItems:"center",gap:5,fontSize:13,fontWeight:600}}><Icon name="arrow-left" size={15}/>Voltar</button>
+            <span style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{menu.find(i=>i.id===sub)?.label}</span>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 16px 80px"}}>{renderSub()}</div>
         </div>
@@ -1315,11 +1834,12 @@ function SupervisorDashboard({session,logout,showToast}){
   const{data:cellReqs}=useTable("cell_change_requests")
   const supervised=cells.filter(c=>c.supervisor_id===session.member_id||c.supervisor_id===session.id)
   const pendingCount=requests.filter(r=>r.status==="pending").length+cellReqs.filter(r=>r.status==="pending").length
+
   const menu=[
-    {id:"cells",icon:"grid",label:"Células",desc:`${supervised.length} células supervisionadas`,color:"#2563eb"},
-    {id:"requests",icon:"inbox",label:"Solicitações",desc:`${pendingCount} pendente(s)`,color:"#dc2626"},
-    {id:"messages",icon:"message",label:"Mensagens",desc:"Comunicar com líderes",color:"#7c3aed"},
-    {id:"reports",icon:"bar-chart",label:"Relatórios",desc:"Visão geral",color:"#059669"},
+    {id:"cells",icon:"grid",label:"Células",desc:`${supervised.length} supervisionadas`,color:C.primary},
+    {id:"requests",icon:"inbox",label:"Solicitações",desc:`${pendingCount} pendente(s)`,color:C.danger},
+    {id:"messages",icon:"message",label:"Mensagens",desc:"Comunicar com líderes",color:C.purple},
+    {id:"reports",icon:"bar-chart",label:"Relatórios",desc:"Visão geral",color:C.gold},
   ]
 
   function CellsView(){
@@ -1329,14 +1849,18 @@ function SupervisorDashboard({session,logout,showToast}){
         const mc=members.filter(m=>m.cell_id===cell.id&&m.status==="Membro")
         const leaders=members.filter(m=>cell.leaders_ids?.includes(m.id))
         return(<Card key={cell.id} style={{marginBottom:10}}>
-          <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:4}}>{cell.name}</div>
-          <div style={{fontSize:12,color:"#64748b",marginBottom:4}}>{cell.neighborhood} • {cell.day} às {cell.time}</div>
-          {cell.frequency&&<div style={{fontSize:11,color:"#7c3aed",marginBottom:8}}>🔄 {cell.frequency}{cell.next_meeting_date?` • Próximo: ${fmtDate(cell.next_meeting_date)}`:""}</div>}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12,color:"#64748b",marginBottom:8}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+            <span style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{cell.name}</span>
+            <Badge label={cell.cell_type||"Adultos"} color={C.primary}/>
+            <Badge label={cell.cell_status||"Ativa"} color={cell.cell_status==="Inativa"?C.danger:C.success}/>
+          </div>
+          <div style={{fontSize:12,color:"#64748b",marginBottom:6}}>{cell.neighborhood} • {cell.day} às {cell.time}</div>
+          {cell.frequency&&<div style={{fontSize:11,color:C.purple,marginBottom:8}}>🔄 {cell.frequency}{cell.next_meeting_date?` • Próx: ${fmtDate(cell.next_meeting_date)}`:""}</div>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12,color:"#64748b",marginBottom:cell.growth_goal>0?10:0}}>
             <span>👤 <b style={{color:"#334155"}}>{leaders.length>0?leaders[0].name.split(" ")[0]:"—"}</b></span>
             <span>👥 <b style={{color:"#334155"}}>{mc.length} membros</b></span>
           </div>
-          {cell.growth_goal>0&&<ProgressBar value={mc.length} max={cell.growth_goal} color="#7c3aed"/>}
+          {cell.growth_goal>0&&<ProgressBar value={mc.length} max={cell.growth_goal} color={C.purple}/>}
         </Card>)
       })}
     </div>)
@@ -1346,34 +1870,34 @@ function SupervisorDashboard({session,logout,showToast}){
     if(sub==="cells")return<CellsView/>
     if(sub==="requests")return<AllRequestsPanel session={session} showToast={showToast}/>
     if(sub==="messages")return<MessagesPanel session={session} showToast={showToast}/>
-    if(sub==="reports")return<ReportsPanel/>
+    if(sub==="reports")return<ReportsPanel session={session}/>
     return null
   }
 
   return(
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-      <header style={{background:"#0f172a",padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div><div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>Supervisor</div><div style={{color:"#7dd3fc",fontSize:12}}>{session.name}</div></div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"#cbd5e1",display:"flex"}}><Icon name="key" size={15}/></button>
-          <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"#cbd5e1",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:600}}><Icon name="log-out" size={15}/>Sair</button>
+      <header style={{background:`linear-gradient(135deg,${C.darker},${C.primary})`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}><LogoIcon size={30}/><div><div style={{color:"#fff",fontSize:15,fontWeight:800}}>Supervisor</div><div style={{color:"rgba(255,255,255,0.6)",fontSize:11}}>{session.name}</div></div></div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex"}}><Icon name="key" size={15}/></button>
+          <button onClick={logout} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Icon name="log-out" size={14}/>Sair</button>
         </div>
       </header>
       {sub==="home"?(
         <div style={{flex:1,padding:"16px 16px 80px"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
-            <Stat label="Células" value={supervised.length} color="#7c3aed" icon="grid"/>
-            <Stat label="Pendências" value={pendingCount} color="#dc2626" icon="inbox"/>
+            <Stat label="Células" value={supervised.length} color={C.purple} icon="grid"/>
+            <Stat label="Pendências" value={pendingCount} color={C.danger} icon="inbox"/>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {menu.map(item=>(<button key={item.id} onClick={()=>setSub(item.id)} style={{background:"#fff",borderRadius:16,border:"1.5px solid #f1f5f9",padding:"16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}><div style={{width:46,height:46,borderRadius:12,background:item.color+"15",display:"flex",alignItems:"center",justifyContent:"center",color:item.color,flexShrink:0}}><Icon name={item.icon} size={22}/></div><div><div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{item.label}</div><div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{item.desc}</div></div></button>))}
+            {menu.map(item=>(<button key={item.id} onClick={()=>setSub(item.id)} style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",padding:"16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,textAlign:"left",boxShadow:"0 1px 6px rgba(0,0,0,0.05)",transition:"all 0.15s"}} onMouseOver={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseOut={e=>e.currentTarget.style.transform="translateY(0)"}><div style={{width:46,height:46,borderRadius:14,background:item.color+"15",display:"flex",alignItems:"center",justifyContent:"center",color:item.color,flexShrink:0}}><Icon name={item.icon} size={22}/></div><div><div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{item.label}</div><div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{item.desc}</div></div><div style={{marginLeft:"auto"}}><Icon name="chevron-right" size={16} color="#cbd5e1"/></div></button>))}
           </div>
         </div>
       ):(
         <div style={{flex:1,display:"flex",flexDirection:"column"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1.5px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"#fff"}}>
-            <button onClick={()=>setSub("home")} style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:6,cursor:"pointer",color:"#64748b",display:"flex"}}><Icon name="arrow-left" size={16}/></button>
-            <span style={{fontSize:16,fontWeight:800,color:"#0f172a"}}>{menu.find(i=>i.id===sub)?.label}</span>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+            <button onClick={()=>setSub("home")} style={{background:"#f1f5f9",border:"none",borderRadius:10,padding:"7px 10px",cursor:"pointer",color:"#64748b",display:"flex",alignItems:"center",gap:5,fontSize:13,fontWeight:600}}><Icon name="arrow-left" size={15}/>Voltar</button>
+            <span style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{menu.find(i=>i.id===sub)?.label}</span>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 16px 80px"}}>{renderSub()}</div>
         </div>
@@ -1383,6 +1907,7 @@ function SupervisorDashboard({session,logout,showToast}){
   )
 }
 
+// ─── MEMBER PORTAL ────────────────────────────────────────────────────────────
 function MemberPortal({session,logout,showToast}){
   const[tab,setTab]=useState("dados")
   const[showChangePw,setShowChangePw]=useState(false)
@@ -1390,69 +1915,182 @@ function MemberPortal({session,logout,showToast}){
   const{data:cells}=useTable("cells")
   const{data:members}=useTable("members")
   const{data:attendance}=useTable("attendance")
+  const{data:prayers}=useTable("prayer_requests")
+  const[showPrayerModal,setShowPrayerModal]=useState(false)
+  const[prayerForm,setPrayerForm]=useState({request:"",is_private:false})
+
   const member=members.find(m=>m.id===session.member_id)
   const cell=member?cells.find(c=>c.id===member.cell_id):null
   const cellMembers=cell?members.filter(m=>m.cell_id===cell.id&&m.status==="Membro"):[]
   const leaders=cell?members.filter(m=>cell.leaders_ids?.includes(m.id)):[]
   const myAtt=attendance.filter(a=>a.member_id===session.member_id).sort((a,b)=>b.date.localeCompare(a.date))
   const pct=myAtt.length?Math.round(myAtt.filter(a=>a.status==="Presente").length/myAtt.length*100):0
+  const myPrayers=prayers.filter(p=>p.member_id===session.member_id)
+
+  const{start,end}=getCurrentWeekDates()
+  const weekBirthday=member?.birth_date&&(()=>{const b=new Date(member.birth_date);const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate());return t>=start&&t<=end})()
+
+  async function submitPrayer(){
+    if(!prayerForm.request.trim()){showToast("Descreva o pedido","error");return}
+    await supabase.from("prayer_requests").insert({request:prayerForm.request,is_private:prayerForm.is_private,cell_id:member?.cell_id||null,member_id:session.member_id||null,member_name:session.name,status:"pending"})
+    showToast("Pedido enviado! 🙏");setShowPrayerModal(false);setPrayerForm({request:"",is_private:false})
+  }
+
   return(
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-      <div style={{background:"linear-gradient(135deg,#0f172a,#1e3a5f)",padding:"24px 18px 16px"}}>
+      <div style={{background:`linear-gradient(135deg,${C.darker},${C.primary})`,padding:"20px 18px 16px",boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
+        {weekBirthday&&<div style={{background:C.gold,borderRadius:10,padding:"8px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16}}>🎂</span><span style={{color:"#fff",fontSize:13,fontWeight:700}}>Hoje é seu aniversário? Parabéns! 🎉</span></div>}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <Avatar name={member?.name||session?.name||"?"} photo={member?.photo_url} size={46} color="#7dd3fc"/>
-            <div><div style={{color:"#f0f9ff",fontSize:16,fontWeight:800}}>{member?.name||session?.name}</div><div style={{color:"#7dd3fc",fontSize:12}}>{cell?.name||"Sem célula"}</div></div>
+            <Avatar name={member?.name||session?.name||"?"} photo={member?.photo_url} size={50} color="rgba(255,255,255,0.2)"/>
+            <div><div style={{color:"#fff",fontSize:16,fontWeight:800}}>{member?.name||session?.name}</div><div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>{cell?.name||"Sem célula"}</div></div>
           </div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:10,padding:8,cursor:"pointer",color:"#93c5fd",display:"flex"}}><Icon name="key" size={16}/></button>
-            <button onClick={logout} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:10,padding:8,cursor:"pointer",color:"#93c5fd",display:"flex"}}><Icon name="log-out" size={16}/></button>
+            <button onClick={()=>setShowChangePw(true)} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:10,padding:8,cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex"}}><Icon name="key" size={16}/></button>
+            <button onClick={logout} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:10,padding:8,cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex"}}><Icon name="log-out" size={16}/></button>
           </div>
         </div>
-        <div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:3}}>
-          {[["dados","Meus Dados"],["celula","Minha Célula"],["presenca","Presença"]].map(([id,label])=>(<button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"8px 4px",borderRadius:10,fontSize:12,fontWeight:700,border:"none",cursor:"pointer",background:tab===id?"#fff":"transparent",color:tab===id?"#1e40af":"#93c5fd",transition:"all 0.15s"}}>{label}</button>))}
+        <div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.08)",borderRadius:14,padding:3}}>
+          {[["dados","Meus Dados"],["celula","Minha Célula"],["presenca","Presença"],["oracao","Oração"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"8px 4px",borderRadius:12,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:tab===id?"#fff":"transparent",color:tab===id?C.primary:"rgba(255,255,255,0.6)",transition:"all 0.15s"}}>{label}</button>
+          ))}
         </div>
       </div>
+
       <div style={{flex:1,padding:"16px 16px 80px",overflowY:"auto"}}>
         {tab==="dados"&&member&&(
           <div>
             <Card style={{marginBottom:12}}>
-              <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Informações Pessoais</h3>
-              {[["Telefone",member.phone],["E-mail",member.email],["Bairro",member.neighborhood],["Status",member.status],["Batizado",member.baptized?`✓ Sim${member.baptism_date?` (${fmtDate(member.baptism_date)})`:""}`:member.baptized===false?"✗ Não":"—"],["Nascimento",fmtDate(member.birth_date)],["Idade",member.age?`${member.age} anos`:null]].map(([k,v])=>v?(<div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>{k}</span><span style={{color:"#334155",fontWeight:700,textAlign:"right",maxWidth:"60%"}}>{v}</span></div>):null)}
+              <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:14}}>Informações Pessoais</h3>
+              {[["Telefone",member.phone],["E-mail",member.email],["Bairro",member.neighborhood],["Status",member.status],["Batizado",member.baptized?`✓ Sim${member.baptism_date?` (${fmtDate(member.baptism_date)})`:""}`:member.baptized===false?"✗ Não":"—"],["Nascimento",fmtDate(member.birth_date)],["Idade",member.age?`${member.age} anos`:null]].map(([k,v])=>v?(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}>
+                  <span style={{color:"#94a3b8",fontWeight:600}}>{k}</span>
+                  <span style={{color:"#334155",fontWeight:700,textAlign:"right",maxWidth:"60%"}}>{v}</span>
+                </div>
+              ):null)}
             </Card>
             {(member.father_name||member.mother_name||member.spouse_name)&&(
               <Card>
                 <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Família</h3>
-                {member.father_name&&<div style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>Pai</span><span style={{color:"#334155",fontWeight:700}}>{member.father_name}</span></div>}
-                {member.mother_name&&<div style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>Mãe</span><span style={{color:"#334155",fontWeight:700}}>{member.mother_name}</span></div>}
-                {member.spouse_name&&<div style={{display:"flex",justifyContent:"space-between",padding:"7px 0",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>Cônjuge</span><span style={{color:"#334155",fontWeight:700}}>{member.spouse_name}</span></div>}
+                {member.father_name&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>Pai</span><span style={{color:"#334155",fontWeight:700}}>{member.father_name}</span></div>}
+                {member.mother_name&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>Mãe</span><span style={{color:"#334155",fontWeight:700}}>{member.mother_name}</span></div>}
+                {member.spouse_name&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>Cônjuge</span><span style={{color:"#334155",fontWeight:700}}>{member.spouse_name}</span></div>}
               </Card>
             )}
           </div>
         )}
+
         {tab==="celula"&&(
           <div>
             {cell?(<>
               <Card style={{marginBottom:12}}>
-                <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Minha Célula</h3>
-                {[["Nome",cell.name],["Dia",cell.day],["Horário",cell.time],["Periodicidade",cell.frequency],["Próximo encontro",fmtDate(cell.next_meeting_date)],["Bairro",cell.neighborhood],["Endereço",cell.street?`${cell.street}, ${cell.number||"s/n"}`:"—"],["Líderes",leaders.length>0?leaders.map(l=>l.name.split(" ")[0]).join(", "):"—"],["Membros",cellMembers.length.toString()],["Início",fmtDate(cell.started_at)]].map(([k,v])=>v&&v!=="—"?(<div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}><span style={{color:"#94a3b8",fontWeight:600}}>{k}</span><span style={{color:"#334155",fontWeight:700,textAlign:"right"}}>{v}</span></div>):null)}
+                <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:14}}>Minha Célula</h3>
+                {[["Nome",cell.name],["Tipo",cell.cell_type],["Dia",cell.day],["Horário",cell.time],["Periodicidade",cell.frequency],["Próximo encontro",fmtDate(cell.next_meeting_date)],["Bairro",cell.neighborhood],["Endereço",cell.street?`${cell.street}, ${cell.number||"s/n"}`:"—"],["Membros",cellMembers.length.toString()],["Início",fmtDate(cell.started_at)]].map(([k,v])=>v&&v!=="—"?(
+                  <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f1f5f9",fontSize:13}}>
+                    <span style={{color:"#94a3b8",fontWeight:600}}>{k}</span>
+                    <span style={{color:"#334155",fontWeight:700,textAlign:"right"}}>{v}</span>
+                  </div>
+                ):null)}
               </Card>
-              {cell.growth_goal>0&&(<Card><h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>🎯 Meta de Crescimento</h3><ProgressBar value={cellMembers.length} max={cell.growth_goal} color="#2563eb"/><p style={{fontSize:12,color:"#64748b",marginTop:8,textAlign:"center"}}>A célula quer chegar em {cell.growth_goal} membros!</p></Card>)}
+
+              {leaders.length>0&&(
+                <Card style={{marginBottom:12,border:`1px solid ${C.primary}20`,background:`${C.primary}04`}}>
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.primary,marginBottom:12}}>👤 Meu Líder</h3>
+                  {leaders.map(leader=>(
+                    <div key={leader.id} style={{display:"flex",alignItems:"center",gap:12}}>
+                      <Avatar name={leader.name} photo={leader.photo_url} size={44} color={C.primary}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{leader.name}</div>
+                        <div style={{fontSize:12,color:"#64748b"}}>Líder</div>
+                      </div>
+                      {leader.phone&&<a href={whatsappLink(leader.phone)} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:10,padding:"8px 14px",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,color:"#166534",textDecoration:"none"}}><Icon name="whatsapp" size={15}/>Contato</a>}
+                    </div>
+                  ))}
+                </Card>
+              )}
+
+              {cell.growth_goal>0&&(
+                <Card style={{border:`1px solid ${C.gold}30`}}>
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.gold,marginBottom:12}}>🎯 Meta de Crescimento</h3>
+                  <ProgressBar value={cellMembers.length} max={cell.growth_goal} color={C.gold}/>
+                  <p style={{fontSize:12,color:"#64748b",marginTop:10,textAlign:"center",marginBottom:0}}>A célula quer chegar em {cell.growth_goal} membros. Convide alguém! 🙌</p>
+                </Card>
+              )}
             </>):(<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Você não está em nenhuma célula</p></Card>)}
           </div>
         )}
+
         {tab==="presenca"&&(
           <div>
-            {myAtt.length>0&&(<Card style={{marginBottom:12,background:"linear-gradient(135deg,#eff6ff,#dbeafe)",border:"1.5px solid #bfdbfe"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:13,fontWeight:700,color:"#1e40af"}}>Minha Frequência</span><span style={{fontSize:18,fontWeight:900,color:pct>=75?"#059669":pct>=50?"#d97706":"#dc2626"}}>{pct}%</span></div><div style={{height:8,background:"rgba(255,255,255,0.5)",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:pct>=75?"#059669":pct>=50?"#d97706":"#dc2626",borderRadius:4}}/></div><div style={{fontSize:12,color:"#3b82f6",marginTop:6}}>{myAtt.filter(a=>a.status==="Presente").length} presenças de {myAtt.length} encontros</div></Card>)}
-            {myAtt.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0,fontSize:13}}>Nenhum encontro registrado</p></Card>}
+            {myAtt.length>0&&(
+              <Card style={{marginBottom:14,background:`linear-gradient(135deg,${C.primary}08,${C.primary}15)`,border:`1px solid ${C.primary}20`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{fontSize:13,fontWeight:800,color:C.primary}}>Minha Frequência</span>
+                  <span style={{fontSize:24,fontWeight:900,color:pct>=75?C.success:pct>=50?C.warning:C.danger}}>{pct}%</span>
+                </div>
+                <div style={{height:10,background:"rgba(255,255,255,0.5)",borderRadius:5,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${pct}%`,background:pct>=75?C.success:pct>=50?C.warning:C.danger,borderRadius:5,transition:"width 0.6s"}}/>
+                </div>
+                <div style={{fontSize:12,color:C.primary,marginTop:8}}>{myAtt.filter(a=>a.status==="Presente").length} presenças de {myAtt.length} encontros</div>
+              </Card>
+            )}
+            {myAtt.length===0&&<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:48,marginBottom:12}}>📅</div><p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>Nenhum encontro registrado</p></div>}
             {myAtt.map(a=>{
-              const sc=a.status==="Presente"?"#059669":a.status==="Ausente"?"#dc2626":"#d97706"
+              const sc=a.status==="Presente"?C.success:a.status==="Ausente"?C.danger:C.warning
               const si=a.status==="Presente"?"✓":a.status==="Ausente"?"✗":"?"
-              return(<Card key={a.id} style={{marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:12}}><div style={{width:34,height:34,borderRadius:10,background:sc+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:sc,flexShrink:0}}>{si}</div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{fmtDate(a.date)}</div>{a.theme&&<div style={{fontSize:11,color:"#64748b"}}>📖 {a.theme}</div>}{a.preacher&&<div style={{fontSize:11,color:"#64748b"}}>🎤 {a.preacher}</div>}</div><div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}><Badge label={a.status} color={sc}/>{a.status==="Presente"&&(<button onClick={()=>setCommentsModal({date:a.date,cellId:a.cell_id})} style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:"#059669",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="comment" size={11}/>Comentar</button>)}</div></div></Card>)
+              return(
+                <Card key={a.id} style={{marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:sc+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:sc,flexShrink:0}}>{si}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{fmtDate(a.date)}</div>
+                      {a.theme&&<div style={{fontSize:11,color:"#94a3b8"}}>📖 {a.theme}</div>}
+                      {a.preacher&&<div style={{fontSize:11,color:"#94a3b8"}}>🎤 {a.preacher}</div>}
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                      <Badge label={a.status} color={sc}/>
+                      {a.status==="Presente"&&(<button onClick={()=>setCommentsModal({date:a.date,cellId:a.cell_id})} style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"3px 8px",cursor:"pointer",color:C.success,fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="comment" size={11}/>Comentar</button>)}
+                    </div>
+                  </div>
+                </Card>
+              )
             })}
           </div>
         )}
+
+        {tab==="oracao"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <h3 style={{fontSize:16,fontWeight:800,color:"#0f172a",margin:0}}>Pedidos de Oração 🙏</h3>
+              <Btn icon="plus" size="sm" variant="gold" onClick={()=>setShowPrayerModal(true)}>Novo</Btn>
+            </div>
+            {myPrayers.length===0&&(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:48,marginBottom:12}}>🙏</div><p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>Você não tem pedidos de oração</p><Btn variant="gold" onClick={()=>setShowPrayerModal(true)} style={{marginTop:8}}>Fazer um Pedido</Btn></div>)}
+            {myPrayers.map(p=>(
+              <Card key={p.id} style={{marginBottom:10,borderLeft:`3px solid ${p.status==="prayed"?C.success:C.gold}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                  <span style={{fontSize:11,color:"#94a3b8"}}>{fmtDate(p.created_at?.split("T")[0])}</span>
+                  <div style={{display:"flex",gap:4}}>
+                    <Badge label={p.status==="prayed"?"✓ Orado":"Aguardando"} color={p.status==="prayed"?C.success:C.gold}/>
+                    {p.is_private&&<Badge label="🔒" color="#64748b"/>}
+                  </div>
+                </div>
+                <p style={{fontSize:13,color:"#334155",margin:0,lineHeight:1.55,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.request}</p>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
+
+      <Modal open={showPrayerModal} onClose={()=>setShowPrayerModal(false)} title="Novo Pedido de Oração">
+        <div style={{textAlign:"center",marginBottom:16}}><div style={{fontSize:40}}>🙏</div></div>
+        <Textarea label="Seu Pedido" value={prayerForm.request} onChange={v=>setPrayerForm(p=>({...p,request:v}))} placeholder="Compartilhe seu pedido..." rows={4}/>
+        <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:12,padding:12,marginBottom:16}}>
+          <input type="checkbox" checked={prayerForm.is_private} onChange={e=>setPrayerForm(p=>({...p,is_private:e.target.checked}))} style={{width:16,height:16,accentColor:C.primary}}/>
+          <div><div style={{fontSize:13,fontWeight:700,color:"#334155"}}>🔒 Pedido Privado</div><div style={{fontSize:11,color:"#94a3b8"}}>Somente líderes poderão ver</div></div>
+        </label>
+        <Btn full onClick={submitPrayer} variant="gold">Enviar Pedido 🙏</Btn>
+      </Modal>
+
       {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cellId} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
       <ChangePasswordModal open={showChangePw} onClose={()=>setShowChangePw(false)} session={session} showToast={showToast}/>
     </div>
