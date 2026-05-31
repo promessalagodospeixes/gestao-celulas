@@ -844,8 +844,11 @@ function CellsPanel({session,showToast}){
 
 // ─── MEMBERS PANEL ────────────────────────────────────────────────────────────
 function MembersPanel({session,showToast}){
-  const{data:members,loading}=useTable("members")
+  const{data:allMembers,loading}=useTable("members")
   const{data:cells}=useTable("cells")
+  const isAdmin=session?.role==="admin"||session?.role==="supervisor"
+  // Leader/secretary only see their cell's members
+  const members=isAdmin?allMembers:allMembers.filter(m=>m.cell_id===session?.cell_id)
   const[modal,setModal]=useState(false)
   const[editing,setEditing]=useState(null)
   const[deleteId,setDeleteId]=useState(null)
@@ -938,11 +941,11 @@ function MembersPanel({session,showToast}){
             {l}
           </button>
         ))}
-        <select value={filterCell} onChange={e=>setFilterCell(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,outline:"none",background:"#fff",color:filterCell?"#1B4F8A":"#64748b",cursor:"pointer"}}>
+        {isAdmin&&<select value={filterCell} onChange={e=>setFilterCell(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,outline:"none",background:"#fff",color:filterCell?"#1B4F8A":"#64748b",cursor:"pointer"}}>
           <option value="">Todas as células</option>
           {cells.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           <option value="sem_celula">Sem célula</option>
-        </select>
+        </select>}
       </div>
 
       {loading&&<Loader/>}
@@ -1082,7 +1085,8 @@ function MeetingsPanel({session,showToast}){
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
 
-  const myCells=session?.role==="admin"||session?.role==="supervisor"?cells:cells.filter(c=>c.id===session?.cell_id)
+  const isAdmin=session?.role==="admin"||session?.role==="supervisor"
+  const myCells=isAdmin?cells:cells.filter(c=>c.id===session?.cell_id)
 
   function openNew(){setForm({...emptyForm,cell_id:session?.cell_id||""});setEditing(null);setMarks({});setStep("form")}
   function openEdit(meeting){
@@ -1132,7 +1136,8 @@ function MeetingsPanel({session,showToast}){
 
   function skipAttendance(){setStep(null);setMarks({});setSavedMeeting(null)}
 
-  const filteredMeetings=meetings.filter(m=>!cellFilter||m.cell_id===cellFilter||m.is_general)
+  const myMeetings=isAdmin||session?.role==="supervisor"?meetings:meetings.filter(m=>m.cell_id===session?.cell_id||m.is_general)
+  const filteredMeetings=myMeetings.filter(m=>!cellFilter||m.cell_id===cellFilter||m.is_general)
   const currentMeeting=savedMeeting||(editing?meetings.find(m=>m.id===editing):null)
   const attMembers=currentMeeting?(currentMeeting.is_general?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===currentMeeting.cell_id&&(m.status==="Membro"||m.status==="Visitante"))):[]
   const presentCount=Object.values(marks).filter(v=>v==="Presente").length
@@ -1144,10 +1149,10 @@ function MeetingsPanel({session,showToast}){
         <Btn icon="plus" size="sm" onClick={openNew}>Novo Encontro</Btn>
       </div>
 
-      <select value={cellFilter} onChange={e=>setCellFilter(e.target.value)} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"10px 14px",fontSize:13,outline:"none",background:"#fff",marginBottom:14}}>
+      {isAdmin&&<select value={cellFilter} onChange={e=>setCellFilter(e.target.value)} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"10px 14px",fontSize:13,outline:"none",background:"#fff",marginBottom:14}}>
         <option value="">Todas as células</option>
         {myCells.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+      </select>}
 
       {loading&&<Loader/>}
       {!loading&&filteredMeetings.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhum encontro registrado</p></Card>}
