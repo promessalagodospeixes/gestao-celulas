@@ -52,12 +52,15 @@ function whatsappLink(phone,name=""){
 }
 
 // ─── LOGO SVG ─────────────────────────────────────────────────────────────────
-const LogoIcon = ({size=40}) => (
+// White circle with flame cutout — matches Promessa Lago dos Peixes brand
+const LogoIcon = ({size=40, dark=false}) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="50" fill="white" fillOpacity="0.15"/>
-    <path d="M35 75 C35 75 25 60 28 45 C30 35 38 28 42 35 C44 40 40 48 44 52 C46 54 50 50 50 50 C50 50 48 62 42 68 C40 70 38 73 35 75Z" fill="white"/>
-    <path d="M50 75 C50 75 58 65 60 55 C62 47 58 38 62 33 C65 29 72 32 73 40 C75 52 68 65 62 72 C59 75 55 77 50 75Z" fill="white" fillOpacity="0.7"/>
-    <path d="M44 38 C44 38 46 32 50 30 C52 29 54 31 52 35 C51 37 48 38 44 38Z" fill="white" fillOpacity="0.5"/>
+    <circle cx="50" cy="50" r="48" fill="white" fillOpacity={dark?"1":"0.95"}/>
+    <path fillRule="evenodd" clipRule="evenodd"
+      d="M50 8 C50 8 62 18 65 30 C67 38 63 44 60 46 C60 46 65 38 58 30 C58 30 62 44 54 52 C54 52 58 42 52 36 C52 36 54 48 46 56 C46 56 44 46 48 38 C48 38 40 46 40 56 C40 64 46 70 50 72 C54 74 62 70 64 62 C66 54 62 46 62 46 C68 50 72 58 70 68 C68 76 60 84 50 86 C40 84 32 76 30 68 C28 58 32 50 38 46 C38 46 34 54 36 62 C36 62 30 54 32 44 C34 36 42 28 44 22 C44 22 40 30 42 38 C38 32 38 22 50 8 Z"
+      fill="currentColor" opacity="0.85"
+    />
+    <circle cx="57" cy="28" r="3.5" fill="currentColor" opacity="0.7"/>
   </svg>
 )
 
@@ -303,17 +306,34 @@ export default function App(){
   }
 
   return(
-    <div style={{minHeight:"100vh",background:"#f0f4f8",fontFamily:"'Outfit',sans-serif",maxWidth:480,margin:"0 auto",position:"relative"}}>
+    <div style={{minHeight:"100vh",background:"#f0f4f8",fontFamily:"'Outfit',sans-serif",position:"relative"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-        ::-webkit-scrollbar{width:3px}
+        ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+        ::-webkit-scrollbar-track{background:transparent}
         input,select,textarea{font-family:'Outfit',sans-serif}
         button{font-family:'Outfit',sans-serif}
+        .tabs-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+        .tabs-scroll::-webkit-scrollbar{height:3px}
+        .tabs-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.3);border-radius:3px}
+        .page-content{max-width:860px;margin:0 auto;width:100%}
+        .modal-inner{max-width:520px}
+        @media(min-width:768px){
+          .admin-layout{display:flex;min-height:100vh}
+          .admin-sidebar{width:220px;background:linear-gradient(180deg,#0f172a,#1B4F8A);position:sticky;top:0;height:100vh;flex-shrink:0;display:flex;flex-direction:column;padding:20px 0}
+          .admin-main{flex:1;overflow:auto}
+          .admin-tabs-top{display:none!important}
+          .admin-sidebar-nav{display:flex!important}
+          .content-card{max-width:860px;margin:0 auto}
+        }
+        @media(max-width:767px){
+          .admin-sidebar{display:none!important}
+        }
       `}</style>
       <Toast msg={toast.msg} type={toast.type}/>
       {showLGPD&&<LGPDModal onAccept={handleLGPDAccept}/>}
@@ -530,25 +550,27 @@ function AdminDashboard({session,logout,showToast}){
             <button onClick={logout} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 12px",cursor:"pointer",color:"rgba(255,255,255,0.8)",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Icon name="log-out" size={14}/>Sair</button>
           </div>
         </div>
-        <div style={{display:"flex",gap:1,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+        <div className="tabs-scroll" style={{display:"flex",gap:1,overflowX:"auto",paddingBottom:3}}>
           {tabs.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{background:tab===t.id?"rgba(255,255,255,0.15)":"transparent",border:"none",borderRadius:"8px 8px 0 0",padding:"7px 10px 10px",cursor:"pointer",color:tab===t.id?"#fff":"rgba(255,255,255,0.5)",fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:52,flexShrink:0,transition:"all 0.15s",borderBottom:tab===t.id?`2px solid ${C.gold}`:"2px solid transparent"}}>
-              <Icon name={t.icon} size={15}/><span>{t.label}</span>
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{background:tab===t.id?"rgba(255,255,255,0.15)":"transparent",border:"none",borderRadius:"8px 8px 0 0",padding:"7px 12px 10px",cursor:"pointer",color:tab===t.id?"#fff":"rgba(255,255,255,0.5)",fontSize:11,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:60,flexShrink:0,transition:"all 0.15s",borderBottom:tab===t.id?"2.5px solid "+C.gold:"2.5px solid transparent",whiteSpace:"nowrap"}}>
+              <Icon name={t.icon} size={16}/><span>{t.label}</span>
             </button>
           ))}
         </div>
       </header>
-      <div style={{flex:1,padding:"16px 16px 80px",overflowY:"auto",animation:"fadeIn 0.2s ease"}}>
-        {tab==="dashboard"&&<AdminOverview session={session} showToast={showToast} setTab={setTab}/>}
-        {tab==="cells"&&<CellsPanel session={session} showToast={showToast}/>}
-        {tab==="members"&&<MembersPanel session={session} showToast={showToast}/>}
-        {tab==="meetings"&&<MeetingsPanel session={session} showToast={showToast}/>}
-        {tab==="events"&&<EventsPanel session={session} showToast={showToast}/>}
-        {tab==="prayer"&&<PrayerPanel session={session} showToast={showToast}/>}
-        {tab==="reports"&&<ReportsPanel session={session}/>}
-        {tab==="messages"&&<MessagesPanel session={session} showToast={showToast}/>}
-        {tab==="requests"&&<AllRequestsPanel session={session} showToast={showToast}/>}
-        {tab==="logs"&&<LogsPanel/>}
+      <div style={{flex:1,padding:"16px",overflowY:"auto",animation:"fadeIn 0.2s ease"}}>
+        <div style={{maxWidth:860,margin:"0 auto"}}>
+          {tab==="dashboard"&&<AdminOverview session={session} showToast={showToast} setTab={setTab}/>}
+          {tab==="cells"&&<CellsPanel session={session} showToast={showToast}/>}
+          {tab==="members"&&<MembersPanel session={session} showToast={showToast}/>}
+          {tab==="meetings"&&<MeetingsPanel session={session} showToast={showToast}/>}
+          {tab==="events"&&<EventsPanel session={session} showToast={showToast}/>}
+          {tab==="prayer"&&<PrayerPanel session={session} showToast={showToast}/>}
+          {tab==="reports"&&<ReportsPanel session={session}/>}
+          {tab==="messages"&&<MessagesPanel session={session} showToast={showToast}/>}
+          {tab==="requests"&&<AllRequestsPanel session={session} showToast={showToast}/>}
+          {tab==="logs"&&<LogsPanel/>}
+        </div>
       </div>
       <ChangePasswordModal open={showChangePw} onClose={()=>setShowChangePw(false)} session={session} showToast={showToast}/>
     </div>
@@ -561,94 +583,220 @@ function AdminOverview({session,showToast,setTab}){
   const{data:requests}=useTable("inactivation_requests")
   const{data:cellReqs}=useTable("cell_change_requests")
   const{data:prayers}=useTable("prayer_requests")
+  const{data:meetings}=useTable("meetings")
+  const{data:attendance}=useTable("attendance")
+
   const activeMembers=members.filter(m=>m.status==="Membro")
   const visitors=members.filter(m=>m.status==="Visitante")
   const baptized=members.filter(m=>m.baptized).length
+  const notBaptized=activeMembers.filter(m=>m.baptized===false).length
+  const activeCells=cells.filter(c=>c.cell_status!=="Inativa")
   const pending=requests.filter(r=>r.status==="pending").length+cellReqs.filter(r=>r.status==="pending").length
   const pendingPrayers=prayers.filter(p=>p.status==="pending").length
 
+  // Attendance stats last 30 days
+  const thirtyDaysAgo=new Date();thirtyDaysAgo.setDate(thirtyDaysAgo.getDate()-30)
+  const recentAtt=attendance.filter(a=>new Date(a.date)>=thirtyDaysAgo)
+  const recentPresent=recentAtt.filter(a=>a.status==="Presente").length
+  const recentTotal=recentAtt.length
+  const avgFreq=recentTotal>0?Math.round(recentPresent/recentTotal*100):0
+
+  // Cell performance
+  const cellStats=activeCells.map(c=>{
+    const mc=members.filter(m=>m.cell_id===c.id&&m.status==="Membro").length
+    const vis=members.filter(m=>m.cell_id===c.id&&m.status==="Visitante").length
+    const cAtt=recentAtt.filter(a=>a.cell_id===c.id)
+    const cPct=cAtt.length>0?Math.round(cAtt.filter(a=>a.status==="Presente").length/cAtt.length*100):null
+    return{id:c.id,name:c.name,type:c.cell_type||"Adultos",members:mc,visitors:vis,goal:c.growth_goal||0,freq:cPct,next:c.next_meeting_date,time:c.time}
+  }).sort((a,b)=>b.members-a.members)
+
+  // Gender breakdown
+  const men=activeMembers.filter(m=>m.gender==="Masculino").length
+  const women=activeMembers.filter(m=>m.gender==="Feminino").length
+
+  // Type breakdown
+  const typeMap={}
+  activeMembers.forEach(m=>{const cell=cells.find(c=>c.id===m.cell_id);const t=cell?.cell_type||"Sem célula";typeMap[t]=(typeMap[t]||0)+1})
+
+  // Birthdays
   const currentMonth=getCurrentMonth()
-  const birthdays=members.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
   const{start,end}=getCurrentWeekDates()
+  const birthdays=members.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
   const weekBirthdays=members.filter(m=>{
     if(!m.birth_date)return false
     const b=new Date(m.birth_date)
-    const thisYear=new Date(new Date().getFullYear(),b.getMonth(),b.getDate())
-    return thisYear>=start&&thisYear<=end
+    const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate())
+    return t>=start&&t<=end
   })
-
-  const nextMeetings=cells.filter(c=>c.active!==false&&c.cell_status!=="Inativa"&&c.next_meeting_date).sort((a,b)=>a.next_meeting_date.localeCompare(b.next_meeting_date)).slice(0,3)
+  const nextMeetings=activeCells.filter(c=>c.next_meeting_date).sort((a,b)=>a.next_meeting_date.localeCompare(b.next_meeting_date)).slice(0,4)
+  const monthNames=["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
 
   return(
     <div style={{animation:"fadeIn 0.2s ease"}}>
+
+      {/* ALERTS */}
       {weekBirthdays.length>0&&(
-        <div style={{background:`linear-gradient(135deg,${C.gold},#d4820f)`,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(232,146,26,0.3)"}}>
-          <div style={{fontSize:28}}>🎂</div>
-          <div>
-            <div style={{color:"#fff",fontSize:13,fontWeight:800,marginBottom:2}}>Aniversário esta semana!</div>
-            <div style={{color:"rgba(255,255,255,0.85)",fontSize:12}}>{weekBirthdays.map(m=>m.name.split(" ")[0]).join(", ")}</div>
+        <div style={{background:`linear-gradient(135deg,${C.gold},#c97b10)`,borderRadius:16,padding:"14px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 16px rgba(232,146,26,0.35)"}}>
+          <div style={{fontSize:32}}>🎂</div>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontSize:14,fontWeight:800,marginBottom:2}}>Aniversário esta semana!</div>
+            <div style={{color:"rgba(255,255,255,0.9)",fontSize:13}}>{weekBirthdays.map(m=>m.name.split(" ")[0]).join(", ")}</div>
           </div>
+          {weekBirthdays[0]?.phone&&<a href={whatsappLink(weekBirthdays[0].phone)} target="_blank" rel="noopener noreferrer" style={{background:"rgba(255,255,255,0.2)",borderRadius:10,padding:"7px 12px",color:"#fff",textDecoration:"none",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:5,flexShrink:0}}><Icon name="whatsapp" size={14}/>Parabéns</a>}
+        </div>
+      )}
+      {(pending+pendingPrayers)>0&&(
+        <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:14,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+          <Icon name="bell" size={18} color={C.danger}/>
+          <div style={{flex:1,fontSize:13,fontWeight:700,color:"#991b1b"}}>{pending} solicitação(ões) + {pendingPrayers} pedido(s) de oração pendentes</div>
+          <button onClick={()=>setTab("requests")} style={{background:C.danger,border:"none",borderRadius:8,padding:"5px 12px",cursor:"pointer",color:"#fff",fontSize:12,fontWeight:700}}>Ver</button>
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-        <Stat label="Membros" value={activeMembers.length} color={C.primary} icon="users" sub={`+ ${visitors.length} visitantes`}/>
-        <Stat label="Células" value={cells.filter(c=>c.active!==false).length} color={C.gold} icon="grid"/>
-        <Stat label="Batizados" value={baptized} color={C.success} icon="check-circle"/>
-        <Stat label="Pendências" value={pending+pendingPrayers} color={C.danger} icon="bell"/>
+      {/* MAIN STATS */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+        <Stat label="Membros" value={activeMembers.length} color={C.primary} icon="users"/>
+        <Stat label="Visitantes" value={visitors.length} color={C.gold} icon="user-plus"/>
+        <Stat label="Células" value={activeCells.length} color={C.success} icon="grid"/>
+        <Stat label="Batizados" value={baptized} color={C.purple} icon="check-circle"/>
       </div>
 
-      {nextMeetings.length>0&&(
-        <Card style={{marginBottom:14,border:`1px solid ${C.primary}20`,background:`${C.primary}05`}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-            <div style={{background:C.primary+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="calendar" size={16} color={C.primary}/></div>
-            <span style={{fontSize:14,fontWeight:800,color:C.primary}}>Próximos Encontros</span>
+      {/* TWO COLUMN LAYOUT ON DESKTOP */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+
+        {/* PRÓXIMOS ENCONTROS */}
+        <Card style={{border:`1px solid ${C.primary}20`,background:`${C.primary}04`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{background:C.primary+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="calendar" size={15} color={C.primary}/></div>
+              <span style={{fontSize:13,fontWeight:800,color:C.primary}}>Próximos Encontros</span>
+            </div>
+            <button onClick={()=>setTab("meetings")} style={{fontSize:11,color:C.primary,fontWeight:600,background:"none",border:"none",cursor:"pointer"}}>Ver todos →</button>
           </div>
+          {nextMeetings.length===0&&<p style={{color:"#94a3b8",fontSize:12,margin:0}}>Nenhum encontro agendado</p>}
           {nextMeetings.map(c=>(
-            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:`1px solid ${C.primary}15`}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{c.name}</div>
-                <div style={{fontSize:11,color:"#64748b"}}>{c.cell_type||"Adultos"}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:13,fontWeight:800,color:C.primary}}>{fmtDate(c.next_meeting_date)}</div>
-                <div style={{fontSize:11,color:"#64748b"}}>{c.time} • {c.frequency||"Semanal"}</div>
-              </div>
+            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderTop:`1px solid ${C.primary}12`}}>
+              <div><div style={{fontSize:12,fontWeight:700,color:"#0f172a"}}>{c.name}</div><div style={{fontSize:10,color:"#64748b"}}>{c.type}</div></div>
+              <div style={{textAlign:"right"}}><div style={{fontSize:12,fontWeight:800,color:C.primary}}>{fmtDate(c.next)}</div><div style={{fontSize:10,color:"#64748b"}}>{c.time}</div></div>
             </div>
           ))}
         </Card>
-      )}
 
-      {birthdays.length>0&&(
-        <Card style={{marginBottom:14,border:"1px solid #fde68a",background:"#fffbeb"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <span style={{fontSize:20}}>🎂</span>
-            <span style={{fontSize:14,fontWeight:800,color:"#92400e"}}>Aniversariantes de {["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][currentMonth]}</span>
+        {/* FREQUÊNCIA GERAL */}
+        <Card style={{border:`1px solid ${C.success}20`,background:`${C.success}04`}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <div style={{background:C.success+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="bar-chart" size={15} color={C.success}/></div>
+            <span style={{fontSize:13,fontWeight:800,color:C.success}}>Frequência (30 dias)</span>
           </div>
-          {birthdays.map(m=>(
-            <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:"1px solid #fde68a"}}>
-              <Avatar name={m.name} photo={m.photo_url} size={30} color={C.gold}/>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#92400e"}}>{m.name}</div>
-                <div style={{fontSize:11,color:"#b45309"}}>{fmtDate(m.birth_date)}{m.age?` • ${m.age} anos`:""}</div>
+          <div style={{textAlign:"center",marginBottom:14}}>
+            <div style={{fontSize:42,fontWeight:900,color:avgFreq>=75?C.success:avgFreq>=50?C.warning:C.danger,lineHeight:1}}>{avgFreq}%</div>
+            <div style={{fontSize:11,color:"#64748b",marginTop:4}}>{recentPresent} presenças de {recentTotal} registros</div>
+          </div>
+          <div style={{height:8,background:"#f1f5f9",borderRadius:4,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${avgFreq}%`,background:avgFreq>=75?C.success:avgFreq>=50?C.warning:C.danger,borderRadius:4,transition:"width 0.6s"}}/>
+          </div>
+        </Card>
+      </div>
+
+      {/* CELL OVERVIEW TABLE */}
+      <Card style={{marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{background:C.gold+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="grid" size={15} color={C.gold}/></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>Visão das Células</span>
+          </div>
+          <button onClick={()=>setTab("cells")} style={{fontSize:11,color:C.primary,fontWeight:600,background:"none",border:"none",cursor:"pointer"}}>Gerenciar →</button>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{borderBottom:"2px solid #f1f5f9"}}>
+                {["Célula","Tipo","Membros","Visitantes","Meta","Freq."].map(h=>(
+                  <th key={h} style={{textAlign:"left",padding:"6px 8px",color:"#94a3b8",fontWeight:700,textTransform:"uppercase",fontSize:10,letterSpacing:"0.04em",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cellStats.map(c=>(
+                <tr key={c.id} style={{borderBottom:"1px solid #f8fafc"}}>
+                  <td style={{padding:"8px",fontWeight:700,color:"#0f172a"}}>{c.name}</td>
+                  <td style={{padding:"8px"}}><Badge label={c.type} color={C.primary}/></td>
+                  <td style={{padding:"8px",fontWeight:700,color:C.primary}}>{c.members}</td>
+                  <td style={{padding:"8px",color:C.gold,fontWeight:600}}>{c.visitors}</td>
+                  <td style={{padding:"8px"}}>
+                    {c.goal>0?(
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{width:60,height:5,background:"#f1f5f9",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(c.members/c.goal*100,100)}%`,background:C.primary,borderRadius:3}}/></div>
+                        <span style={{color:"#64748b",fontSize:10}}>{c.members}/{c.goal}</span>
+                      </div>
+                    ):<span style={{color:"#cbd5e1"}}>—</span>}
+                  </td>
+                  <td style={{padding:"8px"}}>
+                    {c.freq!==null?(
+                      <span style={{fontWeight:800,color:c.freq>=75?C.success:c.freq>=50?C.warning:C.danger}}>{c.freq}%</span>
+                    ):<span style={{color:"#cbd5e1"}}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* BOTTOM ROW */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+
+        {/* COMPOSIÇÃO */}
+        <Card>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <div style={{background:C.purple+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="users" size={15} color={C.purple}/></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>Composição</span>
+          </div>
+          {[["Homens",men,C.primary],["Mulheres",women,"#e11d8c"],["Batizados",baptized,C.gold],["Não batizados",notBaptized,C.warning]].map(([label,value,color])=>(
+            <div key={label} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <span style={{fontSize:12,color:"#64748b",minWidth:100}}>{label}</span>
+              <div style={{flex:1,height:6,background:"#f1f5f9",borderRadius:3,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${activeMembers.length?Math.round(value/activeMembers.length*100):0}%`,background:color,borderRadius:3}}/>
               </div>
-              {m.phone&&<a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:8,padding:"4px 8px",display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:"#166534",textDecoration:"none"}}><Icon name="whatsapp" size={12}/>Parabéns</a>}
+              <span style={{fontSize:12,fontWeight:700,color,minWidth:20,textAlign:"right"}}>{value}</span>
             </div>
           ))}
         </Card>
-      )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {/* ANIVERSARIANTES DO MÊS */}
+        <Card style={{border:"1px solid #fde68a",background:"#fffbeb"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <span style={{fontSize:18}}>🎂</span>
+            <span style={{fontSize:13,fontWeight:800,color:"#92400e"}}>Aniversariantes — {monthNames[currentMonth]}</span>
+          </div>
+          {birthdays.length===0&&<p style={{color:"#b45309",fontSize:12,margin:0}}>Nenhum este mês</p>}
+          <div style={{maxHeight:160,overflowY:"auto"}}>
+            {birthdays.map(m=>(
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderTop:"1px solid #fde68a"}}>
+                <Avatar name={m.name} photo={m.photo_url} size={26} color={C.gold}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#92400e",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                  <div style={{fontSize:10,color:"#b45309"}}>{fmtDate(m.birth_date)}</div>
+                </div>
+                {m.phone&&<a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",borderRadius:6,padding:"3px 6px",display:"flex",alignItems:"center",gap:3,fontSize:10,fontWeight:700,color:"#166534",textDecoration:"none",flexShrink:0}}><Icon name="whatsapp" size={10}/>Wish</a>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* QUICK ACTIONS */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
         {[
-          {id:"cells",icon:"grid",label:"Células",color:C.primary},
-          {id:"members",icon:"users",label:"Membros",color:C.gold},
-          {id:"meetings",icon:"meeting",label:"Encontros",color:C.success},
+          {id:"members",icon:"user-plus",label:"Novo Membro",color:C.primary},
+          {id:"meetings",icon:"meeting",label:"Encontro",color:C.success},
           {id:"prayer",icon:"pray",label:"Orações",color:C.purple},
+          {id:"reports",icon:"bar-chart",label:"Relatórios",color:C.gold},
         ].map(item=>(
-          <button key={item.id} onClick={()=>setTab(item.id)} style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",padding:"16px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",boxShadow:"0 1px 6px rgba(0,0,0,0.05)",transition:"all 0.15s"}}
-            onMouseOver={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseOut={e=>e.currentTarget.style.transform="translateY(0)"}>
-            <div style={{width:42,height:42,borderRadius:12,background:item.color+"15",display:"flex",alignItems:"center",justifyContent:"center",color:item.color,flexShrink:0}}><Icon name={item.icon} size={20}/></div>
-            <span style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{item.label}</span>
+          <button key={item.id} onClick={()=>setTab(item.id)} style={{background:"#fff",borderRadius:14,border:"1px solid #e8edf2",padding:"14px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,textAlign:"center",boxShadow:"0 1px 6px rgba(0,0,0,0.04)",transition:"all 0.15s"}}
+            onMouseOver={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.1)"}} onMouseOut={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 1px 6px rgba(0,0,0,0.04)"}}>
+            <div style={{width:40,height:40,borderRadius:12,background:item.color+"15",display:"flex",alignItems:"center",justifyContent:"center",color:item.color}}><Icon name={item.icon} size={19}/></div>
+            <span style={{fontSize:11,fontWeight:700,color:"#0f172a"}}>{item.label}</span>
           </button>
         ))}
       </div>
@@ -656,7 +804,6 @@ function AdminOverview({session,showToast,setTab}){
   )
 }
 
-// ─── CELLS PANEL ──────────────────────────────────────────────────────────────
 function CellsPanel({session,showToast}){
   const{data:cells,loading}=useTable("cells")
   const{data:members}=useTable("members")
