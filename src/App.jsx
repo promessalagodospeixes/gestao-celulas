@@ -329,7 +329,7 @@ export default function App(){
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function LoginPage({onLogin,showToast}){
-  const[cpf,setCpf]=useState("")
+  const[login,setLogin]=useState("")
   const[pw,setPw]=useState("")
   const[showPw,setShowPw]=useState(false)
   const[err,setErr]=useState("")
@@ -337,11 +337,33 @@ function LoginPage({onLogin,showToast}){
 
   async function handleLogin(e){
     e.preventDefault();setErr("");setLoading(true)
-    const cf=fmtCPF(cpf.replace(/\D/g,""))
-    const cn=cpf.replace(/\D/g,"")
-    let{data}=await supabase.from("users").select("*").eq("cpf",cf).single()
-    if(!data){const r2=await supabase.from("users").select("*").eq("cpf",cn).single();data=r2.data}
-    if(!data){setErr("CPF não encontrado");setLoading(false);return}
+    const input=login.trim()
+    let data=null
+
+    // Try CPF
+    const cpfNorm=input.replace(/\D/g,"")
+    if(cpfNorm.length===11){
+      const r1=await supabase.from("users").select("*").eq("cpf",cpfNorm).single()
+      if(r1.data)data=r1.data
+      if(!data){const r2=await supabase.from("users").select("*").eq("cpf",fmtCPF(cpfNorm)).single();if(r2.data)data=r2.data}
+    }
+
+    // Try phone — match against members table then find user
+    if(!data){
+      const phoneNorm=input.replace(/\D/g,"")
+      if(phoneNorm.length>=8){
+        const{data:member}=await supabase.from("members").select("id").ilike("phone",`%${phoneNorm.slice(-8)}`).single()
+        if(member){const{data:u}=await supabase.from("users").select("*").eq("member_id",member.id).single();if(u)data=u}
+      }
+    }
+
+    // Try email
+    if(!data){
+      const{data:member}=await supabase.from("members").select("id").ilike("email",input).single()
+      if(member){const{data:u}=await supabase.from("users").select("*").eq("member_id",member.id).single();if(u)data=u}
+    }
+
+    if(!data){setErr("Usuário não encontrado. Verifique CPF, telefone ou e-mail.");setLoading(false);return}
     if(data.active===false){setErr("Entre em contato com o líder da sua célula.");setLoading(false);return}
     if(atob64(data.password_hash)!==pw){setErr("Senha incorreta");setLoading(false);return}
     setLoading(false);onLogin(data)
@@ -360,8 +382,8 @@ function LoginPage({onLogin,showToast}){
         <div style={{background:"rgba(255,255,255,0.08)",backdropFilter:"blur(20px)",borderRadius:24,border:"1px solid rgba(255,255,255,0.12)",padding:"28px 24px",width:"100%",maxWidth:380,animation:"slideUp 0.4s ease 0.1s both"}}>
           <form onSubmit={handleLogin}>
             <div style={{marginBottom:16}}>
-              <label style={{display:"block",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)",marginBottom:6,letterSpacing:"0.08em",textTransform:"uppercase"}}>CPF</label>
-              <input value={cpf} onChange={e=>setCpf(e.target.value)} placeholder="000.000.000-00" maxLength={14} required
+              <label style={{display:"block",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.6)",marginBottom:6,letterSpacing:"0.08em",textTransform:"uppercase"}}>CPF, Telefone ou E-mail</label>
+              <input value={login} onChange={e=>setLogin(e.target.value)} placeholder="Digite seu CPF, telefone ou e-mail" required
                 style={{width:"100%",background:"rgba(255,255,255,0.1)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"13px 16px",fontSize:15,color:"#fff",outline:"none",fontFamily:"'Outfit',sans-serif",transition:"border-color 0.15s"}}
                 onFocus={e=>e.target.style.borderColor="rgba(255,255,255,0.4)"} onBlur={e=>e.target.style.borderColor="rgba(255,255,255,0.15)"}/>
             </div>
@@ -377,7 +399,7 @@ function LoginPage({onLogin,showToast}){
               {loading?"Entrando...":"Entrar"}
             </button>
           </form>
-          <p style={{color:"rgba(255,255,255,0.4)",fontSize:12,textAlign:"center",marginTop:16,marginBottom:0}}>Digite seu CPF e senha para entrar</p>
+          <p style={{color:"rgba(255,255,255,0.4)",fontSize:12,textAlign:"center",marginTop:16,marginBottom:0}}>Use CPF, telefone ou e-mail cadastrado</p>
         </div>
       </div>
     </div>
@@ -835,6 +857,7 @@ function MembersPanel({session,showToast}){
   const[cardModal,setCardModal]=useState(null)
   const[showFamilySearch,setShowFamilySearch]=useState(false)
   const[familyField,setFamilyField]=useState(null)
+  const[showInviterSearch,setShowInviterSearch]=useState(false)
 
   const emptyForm={name:"",cpf:"",birth_date:"",age:"",gender:"Masculino",phone:"",email:"",neighborhood:"",cell_id:"",status:"Visitante",baptized:false,baptism_date:"",invited_by:"",father_name:"",mother_name:"",spouse_name:"",photo_url:""}
   const[form,setForm]=useState(emptyForm)
@@ -971,7 +994,13 @@ function MembersPanel({session,showToast}){
         <Inp label="E-mail" type="email" value={form.email} onChange={f("email")}/>
         <Inp label="Bairro" value={form.neighborhood} onChange={v=>f("neighborhood")(v.toUpperCase())}/>
         <Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={cOpts}/>
-        <Inp label="Convidado por" value={form.invited_by} onChange={v=>f("invited_by")(v.toUpperCase())}/>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Convidado por</label>
+          <div style={{display:"flex",gap:8}}>
+            <input value={form.invited_by||""} onChange={e=>f("invited_by")(e.target.value.toUpperCase())} placeholder="Quem convidou esta pessoa?" style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
+            <button type="button" onClick={()=>setShowInviterSearch(true)} style={{background:C.primary+"15",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.primary,display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
+          </div>
+        </div>
         <Inp label="URL da Foto (link)" value={form.photo_url} onChange={f("photo_url")} placeholder="https://..."/>
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:"0.05em",textTransform:"uppercase"}}>Batismo</label>
@@ -997,6 +1026,7 @@ function MembersPanel({session,showToast}){
       </Modal>
 
       <MemberSearchModal open={showFamilySearch} title="Buscar Familiar" members={members} onSelect={m=>setForm(p=>({...p,[familyField]:m.name}))} onClose={()=>setShowFamilySearch(false)}/>
+      <MemberSearchModal open={showInviterSearch} title="Quem convidou?" members={members} onSelect={m=>setForm(p=>({...p,invited_by:m.name}))} onClose={()=>setShowInviterSearch(false)}/>
       {cardModal&&<MemberCard member={cardModal} cells={cells} onClose={()=>setCardModal(null)}/>}
       {pwModal&&<Modal open title="Redefinir Senha" onClose={()=>setPwModal(null)}><Inp label="Nova Senha" type="password" value={newPw} onChange={setNewPw} placeholder="Mínimo 6 caracteres"/><Btn full onClick={resetPw}>Redefinir Senha</Btn></Modal>}
       {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}><p style={{color:"#64748b",marginBottom:16}}>Remover permanentemente?</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Btn variant="ghost" onClick={()=>setDeleteId(null)}>Cancelar</Btn><Btn variant="danger" onClick={del}>Excluir</Btn></div></Modal>}
@@ -1032,66 +1062,86 @@ function MemberCard({member,cells,onClose}){
 
 // ─── MEETINGS PANEL ───────────────────────────────────────────────────────────
 function MeetingsPanel({session,showToast}){
-  const{data:meetings,loading}=useTable("meetings")
+  const{data:meetings,loading,reload}=useTable("meetings")
   const{data:cells}=useTable("cells")
   const{data:members}=useTable("members")
   const{data:attendance}=useTable("attendance")
   const{data:comments}=useTable("meeting_comments")
-  const[modal,setModal]=useState(false)
+  // step: "form" | "attendance"
+  const[step,setStep]=useState(null) // null = closed
   const[editing,setEditing]=useState(null)
-  const[attModal,setAttModal]=useState(null)
+  const[savedMeeting,setSavedMeeting]=useState(null)
   const[commentsModal,setCommentsModal]=useState(null)
   const[editAttModal,setEditAttModal]=useState(null)
   const[preacherSearch,setPreacherSearch]=useState(false)
   const[marks,setMarks]=useState({})
+  const[saving,setSaving]=useState(false)
   const[cellFilter,setCellFilter]=useState("")
 
-  const emptyForm={cell_id:"",date:todayStr(),theme:"",preacher:"",songs:"",photos_link:"",is_general:false}
+  const emptyForm={cell_id:session?.cell_id||"",date:todayStr(),theme:"",preacher:"",songs:"",photos_link:"",is_general:false}
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
 
   const myCells=session?.role==="admin"||session?.role==="supervisor"?cells:cells.filter(c=>c.id===session?.cell_id)
 
-  async function save(){
+  function openNew(){setForm({...emptyForm,cell_id:session?.cell_id||""});setEditing(null);setMarks({});setStep("form")}
+  function openEdit(meeting){
+    setForm({cell_id:meeting.cell_id||"",date:meeting.date,theme:meeting.theme||"",preacher:meeting.preacher||"",songs:meeting.songs||"",photos_link:meeting.photos_link||"",is_general:meeting.is_general||false})
+    setEditing(meeting.id);setMarks({});setStep("form")
+  }
+
+  async function saveForm(){
     if(!form.date){showToast("Data obrigatória","error");return}
     if(!form.is_general&&!form.cell_id){showToast("Selecione a célula","error");return}
+    setSaving(true)
     const payload={...form,cell_id:form.is_general?null:form.cell_id||null,created_by:session.id}
     if(editing){
       await supabase.from("meetings").update(payload).eq("id",editing)
       showToast("Encontro atualizado!")
+      setStep(null);setEditing(null)
     }else{
       const{data:newMeeting}=await supabase.from("meetings").insert(payload).select().single()
-      if(newMeeting&&form.is_general){
-        // Auto update next meeting for all cells
-      }else if(newMeeting&&form.cell_id){
+      if(newMeeting&&form.cell_id&&!form.is_general){
         const cell=cells.find(c=>c.id===form.cell_id)
-        if(cell?.auto_create_meetings){
-          const nextDate=getNextMeetingDate(cell.day)
-          await supabase.from("cells").update({next_meeting_date:nextDate}).eq("id",form.cell_id)
-        }
+        if(cell?.auto_create_meetings)await supabase.from("cells").update({next_meeting_date:getNextMeetingDate(cell.day)}).eq("id",form.cell_id)
       }
-      showToast("Encontro criado!")
+      setSavedMeeting(newMeeting)
+      showToast("Encontro criado! Agora faça a chamada 👇")
+      setStep("attendance") // go straight to attendance
     }
-    setModal(false);setEditing(null);setForm(emptyForm)
+    setSaving(false);reload()
   }
 
-  async function saveAttendance(meetingId,cellId,isGeneral){
+  async function saveAttendance(){
+    const meeting=savedMeeting||meetings.find(m=>m.id===editing)
+    if(!meeting){setStep(null);return}
+    const cellId=meeting.cell_id
+    const isGeneral=meeting.is_general
     const targetMembers=isGeneral?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===cellId&&(m.status==="Membro"||m.status==="Visitante"))
-    const records=targetMembers.map(m=>({member_id:m.id,member_name:m.name,cell_id:cellId,date:attModal.date,theme:attModal.theme,preacher:attModal.preacher,songs:attModal.songs,photos_link:attModal.photos_link,status:marks[m.id]||"Ausente",recorded_by:session.id}))
+    const{data:existing}=await supabase.from("attendance").select("member_id").eq("date",meeting.date).eq("cell_id",cellId||"")
+    const existingIds=new Set((existing||[]).map(e=>e.member_id))
+    const records=targetMembers.filter(m=>!existingIds.has(m.id)).map(m=>({member_id:m.id,member_name:m.name,cell_id:cellId,date:meeting.date,theme:meeting.theme,preacher:meeting.preacher,songs:meeting.songs,photos_link:meeting.photos_link,status:marks[m.id]||"Ausente",recorded_by:session.id}))
     if(records.length>0){
       await supabase.from("attendance").insert(records)
-      showToast("Presença registrada!")
+      showToast("Presença salva! ✓")
+    }else{
+      showToast("Presença já registrada!","warning")
     }
-    setAttModal(null);setMarks({})
+    setStep(null);setMarks({});setSavedMeeting(null)
   }
 
+  function skipAttendance(){setStep(null);setMarks({});setSavedMeeting(null)}
+
   const filteredMeetings=meetings.filter(m=>!cellFilter||m.cell_id===cellFilter||m.is_general)
+  const currentMeeting=savedMeeting||(editing?meetings.find(m=>m.id===editing):null)
+  const attMembers=currentMeeting?(currentMeeting.is_general?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===currentMeeting.cell_id&&(m.status==="Membro"||m.status==="Visitante"))):[]
+  const presentCount=Object.values(marks).filter(v=>v==="Presente").length
 
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
         <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Encontros</h2>
-        <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Novo</Btn>
+        <Btn icon="plus" size="sm" onClick={openNew}>Novo Encontro</Btn>
       </div>
 
       <select value={cellFilter} onChange={e=>setCellFilter(e.target.value)} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"10px 14px",fontSize:13,outline:"none",background:"#fff",marginBottom:14}}>
@@ -1112,35 +1162,41 @@ function MeetingsPanel({session,showToast}){
           <Card key={meeting.id} style={{marginBottom:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
               <div style={{flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
                   <span style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{fmtDate(meeting.date)}</span>
-                  {meeting.is_general&&<Badge label="Celulão" color={C.gold}/>}
+                  {meeting.is_general&&<Badge label="🔥 Celulão" color={C.gold}/>}
                   {cell&&<Badge label={cell.name} color={C.primary}/>}
                 </div>
                 {meeting.theme&&<div style={{fontSize:12,color:"#64748b"}}>📖 {meeting.theme}</div>}
                 {meeting.preacher&&<div style={{fontSize:12,color:"#64748b"}}>🎤 {meeting.preacher}</div>}
                 {meeting.songs&&<div style={{fontSize:12,color:"#64748b"}}>🎵 {meeting.songs}</div>}
               </div>
-              <div style={{display:"flex",gap:5,flexDirection:"column",alignItems:"flex-end"}}>
-                {total>0&&<div style={{display:"flex",gap:4}}><Badge label={`✓ ${present}`} color={C.success}/><Badge label={`✗ ${total-present}`} color={C.danger}/></div>}
+              <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}>
+                {total>0?<div style={{display:"flex",gap:4}}><Badge label={`✓ ${present}`} color={C.success}/><Badge label={`✗ ${total-present}`} color={C.danger}/></div>:<Badge label="Sem presença" color="#94a3b8"/>}
                 {meeting.photos_link&&<a href={meeting.photos_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.primary,fontWeight:600,display:"flex",alignItems:"center",gap:3,textDecoration:"none"}}><Icon name="link" size={11}/>Fotos</a>}
               </div>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              <button onClick={()=>{setAttModal(meeting);setMarks({})}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.primary,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="check-circle" size={12}/>{total>0?"Ver Presença":"Registrar Presença"}</button>
-              <button onClick={()=>setCommentsModal(meeting)} style={{background:"#f0fdf4",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.success,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="comment" size={12}/>Comentários {meetingComments.length>0&&`(${meetingComments.length})`}</button>
-              {total>0&&<button onClick={()=>setEditAttModal({meeting,items:meetingAtt})} style={{background:"#fef3c7",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.warning,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="edit" size={12}/>Editar</button>}
-              <button onClick={()=>{setForm({cell_id:meeting.cell_id||"",date:meeting.date,theme:meeting.theme||"",preacher:meeting.preacher||"",songs:meeting.songs||"",photos_link:meeting.photos_link||"",is_general:meeting.is_general||false});setEditing(meeting.id);setModal(true)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"#64748b",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="edit" size={12}/>Dados</button>
+              <button onClick={()=>{setSavedMeeting(meeting);setMarks({});setStep("attendance")}} style={{background:total>0?"#fef3c7":C.primary+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:total>0?C.warning:C.primary,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                <Icon name="check-circle" size={12}/>{total>0?"Editar Presença":"Registrar Presença"}
+              </button>
+              <button onClick={()=>setCommentsModal(meeting)} style={{background:"#f0fdf4",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.success,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                <Icon name="comment" size={12}/>Comentários{meetingComments.length>0&&` (${meetingComments.length})`}
+              </button>
+              <button onClick={()=>openEdit(meeting)} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"#64748b",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+                <Icon name="edit" size={12}/>Editar
+              </button>
             </div>
           </Card>
         )
       })}
 
-      <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Encontro":"Novo Encontro"}>
+      {/* STEP 1 — FORM */}
+      <Modal open={step==="form"} onClose={()=>setStep(null)} title={editing?"Editar Encontro":"Novo Encontro"}>
         <div style={{marginBottom:14}}>
           <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:form.is_general?C.gold+"10":"#f8fafc",border:`1.5px solid ${form.is_general?C.gold:"#e2e8f0"}`,borderRadius:12,padding:12}}>
             <input type="checkbox" checked={form.is_general} onChange={e=>f("is_general")(e.target.checked)} style={{width:16,height:16,accentColor:C.gold}}/>
-            <span style={{fontSize:13,fontWeight:700,color:form.is_general?C.gold:"#334155"}}>🔥 Celulão — Encontro Geral de Todas as Células</span>
+            <span style={{fontSize:13,fontWeight:700,color:form.is_general?C.gold:"#334155"}}>🔥 Celulão — Encontro Geral</span>
           </label>
         </div>
         {!form.is_general&&<Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"Selecione..."},...myCells.map(c=>({value:c.id,label:c.name}))]} required/>}
@@ -1155,33 +1211,57 @@ function MeetingsPanel({session,showToast}){
         </div>
         <Textarea label="Músicas Cantadas" value={form.songs} onChange={f("songs")} placeholder="Liste as músicas..." rows={2}/>
         <Inp label="Link das Fotos" value={form.photos_link} onChange={f("photos_link")} placeholder="https://..."/>
-        <Btn full onClick={save}>{editing?"Salvar Alterações":"Criar Encontro"}</Btn>
+        <Btn full onClick={saveForm} disabled={saving} icon={editing?"check":"chevron-right"}>
+          {saving?"Salvando...":(editing?"Salvar Alterações":"Salvar e Fazer Chamada →")}
+        </Btn>
       </Modal>
 
-      {attModal&&(
-        <Modal open title={`Presença — ${fmtDate(attModal.date)}${attModal.is_general?" (Celulão)":""}`} onClose={()=>{setAttModal(null);setMarks({})}}>
-          {(attModal.is_general?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===attModal.cell_id&&(m.status==="Membro"||m.status==="Visitante"))).map(m=>{
-            const existing=attendance.find(a=>a.date===attModal.date&&a.member_id===m.id)
-            const s=marks[m.id]||(existing?.status)||""
-            return(
-              <div key={m.id} style={{marginBottom:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                  <Avatar name={m.name} size={28} color={C.primary}/>
-                  <span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{m.name}</span>
-                  {existing&&!marks[m.id]&&<Badge label={existing.status} color={existing.status==="Presente"?C.success:C.danger}/>}
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                  {["Presente","Ausente","Justificado"].map(v=>(
-                    <button key={v} onClick={()=>setMarks(p=>({...p,[m.id]:v}))} style={{padding:"7px 4px",borderRadius:8,fontSize:12,fontWeight:700,border:`1.5px solid ${s===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#e2e8f0"}`,background:s===v?(v==="Presente"?"#dcfce7":v==="Ausente"?"#fee2e2":"#fef3c7"):"#f8fafc",color:s===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#64748b",cursor:"pointer"}}>
-                      {v==="Presente"?"✓":v==="Ausente"?"✗":"?"} {v}
-                    </button>
-                  ))}
-                </div>
+      {/* STEP 2 — ATTENDANCE */}
+      {step==="attendance"&&currentMeeting&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.65)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+          <div style={{background:"#fff",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 32px rgba(0,0,0,0.15)"}}>
+            <div style={{padding:"18px 20px 14px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                <h3 style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>Chamada — {fmtDate(currentMeeting.date)}</h3>
+                <button onClick={skipAttendance} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:"#64748b",display:"flex"}}><Icon name="x" size={15}/></button>
               </div>
-            )
-          })}
-          {Object.keys(marks).length>0&&<Btn full onClick={()=>saveAttendance(attModal.id,attModal.cell_id,attModal.is_general)} style={{marginTop:12}} icon="check">Salvar Presença</Btn>}
-        </Modal>
+              {currentMeeting.theme&&<div style={{fontSize:12,color:"#64748b"}}>📖 {currentMeeting.theme}</div>}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8}}>
+                <span style={{fontSize:12,color:"#94a3b8",fontWeight:600}}>{attMembers.length} pessoas na lista</span>
+                <span style={{fontSize:14,fontWeight:900,color:C.success}}>{presentCount} ✓ Presentes</span>
+              </div>
+            </div>
+            <div style={{overflowY:"auto",padding:"12px 16px",flex:1}}>
+              {attMembers.map(m=>{
+                const existing=attendance.find(a=>a.date===currentMeeting.date&&a.member_id===m.id)
+                const s=marks[m.id]||(existing?.status)||""
+                return(
+                  <div key={m.id} style={{marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <Avatar name={m.name} photo={m.photo_url} size={30} color={m.status==="Membro"?C.primary:C.gold}/>
+                      <div style={{flex:1}}>
+                        <span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{m.name}</span>
+                        {m.status==="Visitante"&&<span style={{fontSize:10,color:C.gold,fontWeight:600,marginLeft:6}}>visitante</span>}
+                      </div>
+                      {existing&&!marks[m.id]&&<Badge label={existing.status} color={existing.status==="Presente"?C.success:C.danger}/>}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                      {["Presente","Ausente","Justificado"].map(v=>(
+                        <button key={v} onClick={()=>setMarks(p=>({...p,[m.id]:v}))} style={{padding:"8px 4px",borderRadius:8,fontSize:12,fontWeight:700,border:`1.5px solid ${s===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#e2e8f0"}`,background:s===v?(v==="Presente"?"#dcfce7":v==="Ausente"?"#fee2e2":"#fef3c7"):"#f8fafc",color:s===v?(v==="Presente"?C.success:v==="Ausente"?C.danger:C.warning):"#94a3b8",cursor:"pointer"}}>
+                          {v==="Presente"?"✓":v==="Ausente"?"✗":"?"} {v==="Justificado"?"Justif.":v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{padding:"12px 16px 24px",borderTop:"1px solid #f1f5f9",flexShrink:0,display:"flex",gap:10}}>
+              <Btn variant="ghost" onClick={skipAttendance} style={{flex:1}}>Pular</Btn>
+              <Btn onClick={saveAttendance} icon="check" style={{flex:2}}>Salvar Chamada ({presentCount} presentes)</Btn>
+            </div>
+          </div>
+        </div>
       )}
 
       {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cell_id} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
@@ -1461,6 +1541,7 @@ function ReportsPanel({session}){
   const{data:members}=useTable("members")
   const{data:cells}=useTable("cells")
   const{data:attendance}=useTable("attendance")
+  const{data:meetings}=useTable("meetings")
   const Bar=({value,max,color})=>(<div style={{height:8,background:"#f1f5f9",borderRadius:4,overflow:"hidden",flex:1}}><div style={{height:"100%",width:`${max?Math.round(value/max*100):0}%`,background:color,borderRadius:4}}/></div>)
   const activeMembers=members.filter(m=>m.status==="Membro")
   const visitors=members.filter(m=>m.status==="Visitante")
@@ -1481,7 +1562,7 @@ function ReportsPanel({session}){
         <Stat label="Membros" value={activeMembers.length} color={C.primary} icon="users" sub={`+ ${visitors.length} visitantes`}/>
         <Stat label="Batizados" value={baptized} color={C.gold} icon="check-circle"/>
         <Stat label="Células Ativas" value={cells.filter(c=>c.cell_status!=="Inativa").length} color={C.success} icon="grid"/>
-        <Stat label="Encontros" value={[...new Set(attendance.map(a=>a.date))].length} color={C.purple} icon="calendar"/>
+        <Stat label="Encontros" value={meetings.length} color={C.purple} icon="calendar"/>
       </div>
 
       {birthdays.length>0&&(
@@ -1923,7 +2004,13 @@ function MemberPortal({session,logout,showToast}){
   const cell=member?cells.find(c=>c.id===member.cell_id):null
   const cellMembers=cell?members.filter(m=>m.cell_id===cell.id&&m.status==="Membro"):[]
   const leaders=cell?members.filter(m=>cell.leaders_ids?.includes(m.id)):[]
-  const myAtt=attendance.filter(a=>a.member_id===session.member_id).sort((a,b)=>b.date.localeCompare(a.date))
+  const myAttRaw=attendance.filter(a=>a.member_id===session.member_id)
+  // Deduplicate by date — keep the one with "Presente" if exists, otherwise first
+  const myAttMap={}
+  myAttRaw.forEach(a=>{
+    if(!myAttMap[a.date]||a.status==="Presente")myAttMap[a.date]=a
+  })
+  const myAtt=Object.values(myAttMap).sort((a,b)=>b.date.localeCompare(a.date))
   const pct=myAtt.length?Math.round(myAtt.filter(a=>a.status==="Presente").length/myAtt.length*100):0
   const myPrayers=prayers.filter(p=>p.member_id===session.member_id)
 
