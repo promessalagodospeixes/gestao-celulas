@@ -372,15 +372,23 @@ function LoginPage({onLogin,showToast}){
     if(!data){
       const phoneNorm=input.replace(/\D/g,"")
       if(phoneNorm.length>=8){
-        const{data:member}=await supabase.from("members").select("id").ilike("phone",`%${phoneNorm.slice(-8)}`).single()
-        if(member){const{data:u}=await supabase.from("users").select("*").eq("member_id",member.id).single();if(u)data=u}
+        const{data:members}=await supabase.from("members").select("id,phone").ilike("phone",`%${phoneNorm.slice(-8)}`)
+        if(members&&members.length>0){
+          const member=members[0]
+          const{data:u}=await supabase.from("users").select("*").eq("member_id",member.id).maybeSingle()
+          if(u)data=u
+        }
       }
     }
 
     // Try email
     if(!data){
-      const{data:member}=await supabase.from("members").select("id").ilike("email",input).single()
-      if(member){const{data:u}=await supabase.from("users").select("*").eq("member_id",member.id).single();if(u)data=u}
+      const{data:members}=await supabase.from("members").select("id,email").ilike("email",input)
+      if(members&&members.length>0){
+        const member=members[0]
+        const{data:u}=await supabase.from("users").select("*").eq("member_id",member.id).maybeSingle()
+        if(u)data=u
+      }
     }
 
     if(!data){setErr("Usuário não encontrado. Verifique CPF, telefone ou e-mail.");setLoading(false);return}
@@ -538,8 +546,8 @@ function AdminDashboard({session,logout,showToast}){
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <header style={{background:`linear-gradient(135deg,${C.darker},${C.primary})`,padding:"14px 18px 0",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <LogoIcon size={30}/>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{color:"rgba(255,255,255,0.9)"}}><LogoIcon size={34}/></div>
             <div>
               <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Painel do Gestor</div>
               <div style={{color:"rgba(255,255,255,0.6)",fontSize:11}}>{session?.name}</div>
@@ -559,7 +567,7 @@ function AdminDashboard({session,logout,showToast}){
         </div>
       </header>
       <div style={{flex:1,padding:"16px",overflowY:"auto",animation:"fadeIn 0.2s ease"}}>
-        <div style={{maxWidth:860,margin:"0 auto"}}>
+        <div style={{maxWidth:1200,margin:"0 auto",width:"100%"}}>
           {tab==="dashboard"&&<AdminOverview session={session} showToast={showToast} setTab={setTab}/>}
           {tab==="cells"&&<CellsPanel session={session} showToast={showToast}/>}
           {tab==="members"&&<MembersPanel session={session} showToast={showToast}/>}
@@ -1133,8 +1141,7 @@ function MembersPanel({session,showToast}){
       <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Cadastro":"Novo Cadastro"}>
         <Inp label="Nome Completo" value={form.name} onChange={v=>f("name")(v.toUpperCase())} required/>
         <Sel label="Status" value={form.status} onChange={f("status")} options={STATUS_LIST.map(s=>({value:s,label:s}))}/>
-        {form.status==="Membro"&&<Inp label="CPF *obrigatório para acesso" value={form.cpf} onChange={v=>f("cpf")(fmtCPF(v))} placeholder="000.000.000-00" required/>}
-        {form.status==="Visitante"&&<Inp label="CPF (opcional)" value={form.cpf} onChange={v=>f("cpf")(fmtCPF(v))} placeholder="000.000.000-00"/>}
+        <Inp label={form.status==="Membro"?"CPF (opcional — necessário para líderes/secretários)":"CPF (opcional)"} value={form.cpf} onChange={v=>f("cpf")(fmtCPF(v))} placeholder="000.000.000-00"/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <Inp label="Data de Nascimento" type="date" value={form.birth_date} onChange={v=>{f("birth_date")(v);f("age")(calcAge(v)||"")}}/>
           <Inp label="Idade" value={form.age} onChange={f("age")} type="number" readOnly={!!form.birth_date}/>
@@ -1514,6 +1521,13 @@ function PrayerPanel({session,showToast}){
     showToast("Marcado como orado! 🙏")
   }
 
+  async function deletePrayer(id){
+    await supabase.from("prayer_requests").delete().eq("id",id)
+    showToast("Pedido removido")
+  }
+
+  const canDelete=session?.role==="admin"||session?.role==="supervisor"||session?.role==="leader"
+
   const statusColor={pending:C.gold,prayed:C.success}
   const statusLabel={pending:"Aguardando oração",prayed:"Orado ✓"}
 
@@ -1563,11 +1577,18 @@ function PrayerPanel({session,showToast}){
               </div>
             </div>
             <p style={{fontSize:13,color:"#334155",margin:"0 0 10px",lineHeight:1.6,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.request}</p>
-            {isPending&&(session?.role==="admin"||session?.role==="leader"||session?.role==="secretary")&&(
-              <button onClick={()=>resolve(p.id)} style={{background:C.success+"15",border:`1px solid ${C.success}30`,borderRadius:8,padding:"6px 14px",cursor:"pointer",color:C.success,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
-                <Icon name="check" size={13}/>Marcar como Orado
-              </button>
-            )}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {isPending&&(session?.role==="admin"||session?.role==="leader"||session?.role==="secretary"||session?.role==="supervisor")&&(
+                <button onClick={()=>resolve(p.id)} style={{background:C.success+"15",border:`1px solid ${C.success}30`,borderRadius:8,padding:"6px 14px",cursor:"pointer",color:C.success,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                  <Icon name="check" size={13}/>Marcar como Orado
+                </button>
+              )}
+              {canDelete&&(
+                <button onClick={()=>deletePrayer(p.id)} style={{background:"#fee2e2",border:"1px solid #fecaca",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:C.danger,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+                  <Icon name="trash" size={12}/>Excluir
+                </button>
+              )}
+            </div>
           </Card>
         )
       })}
