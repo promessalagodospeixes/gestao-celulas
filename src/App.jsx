@@ -283,9 +283,26 @@ export default function App(){
   const[toast,setToast]=useState({msg:"",type:"success"})
   const[showLGPD,setShowLGPD]=useState(false)
   const[pendingSession,setPendingSession]=useState(null)
+  const[loading,setLoading]=useState(true)
+
+  // Restore session from localStorage on load
+  useEffect(()=>{
+    try{
+      const saved=localStorage.getItem("celulas_session")
+      if(saved){
+        const user=JSON.parse(saved)
+        if(user&&user.id){
+          setSession(user)
+          const map={admin:"admin",supervisor:"supervisor",leader:"leader",secretary:"secretary",member:"member"}
+          setPage(map[user.role]||"member")
+        }
+      }
+    }catch(e){}
+    setLoading(false)
+  },[])
 
   const showToast=useCallback((msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast({msg:"",type:"success"}),3500)},[])
-  function doLogout(){setSession(null);setPage("login")}
+  function doLogout(){setSession(null);setPage("login");localStorage.removeItem("celulas_session")}
 
   async function doLogin(user){
     if(user.active===false)return
@@ -301,9 +318,17 @@ export default function App(){
 
   function startSession(user){
     setSession(user)
+    try{localStorage.setItem("celulas_session",JSON.stringify(user))}catch(e){}
     const map={admin:"admin",supervisor:"supervisor",leader:"leader",secretary:"secretary",member:"member"}
     setPage(map[user.role]||"member")
   }
+
+  if(loading)return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a,#1B4F8A)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+      <div style={{color:"rgba(255,255,255,0.9)"}}><LogoIcon size={64}/></div>
+      <div style={{width:36,height:36,border:"3px solid rgba(255,255,255,0.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+    </div>
+  )
 
   return(
     <div style={{minHeight:"100vh",background:"#f0f4f8",fontFamily:"'Outfit',sans-serif",position:"relative"}}>
@@ -588,6 +613,7 @@ function AdminDashboard({session,logout,showToast}){
 }
 
 function AdminOverview({session,showToast,setTab}){
+  const[bdModal,setBdModal]=useState(null)
   const{data:cells}=useTable("cells")
   const{data:members}=useTable("members")
   const{data:requests}=useTable("inactivation_requests")
@@ -653,28 +679,25 @@ function AdminOverview({session,showToast,setTab}){
     <div style={{animation:"fadeIn 0.2s ease"}}>
 
       {/* ALERTS */}
-      {weekBirthdays.length>0&&(()=>{
-        const[bdModal,setBdModal]=useState(null)
-        return(
-          <div style={{background:`linear-gradient(135deg,${C.gold},#c97b10)`,borderRadius:16,padding:"14px 18px",marginBottom:16,boxShadow:"0 4px 16px rgba(232,146,26,0.35)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:weekBirthdays.length>0?8:0}}>
-              <div style={{fontSize:28}}>🎂</div>
-              <span style={{color:"#fff",fontSize:13,fontWeight:800,flex:1}}>Aniversário esta semana!</span>
-            </div>
-            {weekBirthdays.map(m=>(
-              <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
-                <Avatar name={m.name} photo={m.photo_url} size={34} color="rgba(255,255,255,0.3)"/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#fff",fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
-                  <div style={{color:"rgba(255,255,255,0.8)",fontSize:11}}>{m.cellName} • {m.dayName}, {m.dayNum}/{m.monthNum}</div>
-                </div>
-                <button onClick={()=>setBdModal(m)} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:10,padding:"6px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,flexShrink:0}}><Icon name="whatsapp" size={13}/>Parabéns</button>
-              </div>
-            ))}
-            {bdModal&&<BirthdayMessageModal member={bdModal} cellName={bdModal.cellName} senderName={session.name} senderRole={session.role} onClose={()=>setBdModal(null)}/>}
+      {weekBirthdays.length>0&&(
+        <div style={{background:`linear-gradient(135deg,${C.gold},#c97b10)`,borderRadius:16,padding:"14px 18px",marginBottom:16,boxShadow:"0 4px 16px rgba(232,146,26,0.35)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+            <div style={{fontSize:28}}>🎂</div>
+            <span style={{color:"#fff",fontSize:13,fontWeight:800,flex:1}}>Aniversário esta semana!</span>
           </div>
-        )
-      })()}
+          {weekBirthdays.map(m=>(
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
+              <Avatar name={m.name} photo={m.photo_url} size={34} color="rgba(255,255,255,0.3)"/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#fff",fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                <div style={{color:"rgba(255,255,255,0.8)",fontSize:11}}>{m.cellName} • {m.dayName}, {m.dayNum}/{m.monthNum}</div>
+              </div>
+              <button onClick={()=>setBdModal(m)} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:10,padding:"6px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,flexShrink:0}}><Icon name="whatsapp" size={13}/>Parabéns</button>
+            </div>
+          ))}
+          {bdModal&&<BirthdayMessageModal member={bdModal} cellName={bdModal.cellName} senderName={session.name} senderRole={session.role} onClose={()=>setBdModal(null)}/>}
+        </div>
+      )}
       {(pending+pendingPrayers)>0&&(
         <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:14,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
           <Icon name="bell" size={18} color={C.danger}/>
@@ -2199,6 +2222,7 @@ function LogsPanel(){
 // ─── LEADER/SECRETARY DASHBOARD ───────────────────────────────────────────────
 function LeaderSecretaryDashboard({session,logout,showToast}){
   const[sub,setSub]=useState("home")
+  const[lsBdModal,setLsBdModal]=useState(null)
   const[showChangePw,setShowChangePw]=useState(false)
   const{data:cells}=useTable("cells")
   const{data:members}=useTable("members")
@@ -2253,33 +2277,32 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
       </header>
       {sub==="home"?(
         <div style={{flex:1,padding:"16px 16px 80px"}}>
-          {weekBirthdays.length>0&&(()=>{
-            const[bdModal,setBdModal]=useState(null)
-            const bDays=weekBirthdays.map(m=>{
-              const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
-              const weekDays=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
-              return{...m,dayName:weekDays[bDate.getDay()],dayNum:String(bDate.getDate()).padStart(2,"0"),monthNum:String(bDate.getMonth()+1).padStart(2,"0"),cellName:cell?.name||""}
-            })
-            return(
-              <div style={{background:`linear-gradient(135deg,${C.gold},#d4820f)`,borderRadius:16,padding:"14px 16px",marginBottom:16,boxShadow:"0 4px 16px rgba(232,146,26,0.3)"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                  <div style={{fontSize:24}}>🎂</div>
-                  <span style={{color:"#fff",fontSize:13,fontWeight:800}}>Aniversário esta semana!</span>
-                </div>
-                {bDays.map(m=>(
+          {weekBirthdays.length>0&&(
+            <div style={{background:`linear-gradient(135deg,${C.gold},#d4820f)`,borderRadius:16,padding:"14px 16px",marginBottom:16,boxShadow:"0 4px 16px rgba(232,146,26,0.3)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <div style={{fontSize:24}}>🎂</div>
+                <span style={{color:"#fff",fontSize:13,fontWeight:800}}>Aniversário esta semana!</span>
+              </div>
+              {weekBirthdays.map(m=>{
+                const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
+                const weekDays=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
+                const dayName=weekDays[bDate.getDay()]
+                const dayNum=String(bDate.getDate()).padStart(2,"0")
+                const monthNum=String(bDate.getMonth()+1).padStart(2,"0")
+                return(
                   <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
                     <Avatar name={m.name} photo={m.photo_url} size={30} color="rgba(255,255,255,0.3)"/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{color:"#fff",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
-                      <div style={{color:"rgba(255,255,255,0.8)",fontSize:11}}>{m.dayName}, {m.dayNum}/{m.monthNum}</div>
+                      <div style={{color:"rgba(255,255,255,0.8)",fontSize:11}}>{dayName}, {dayNum}/{monthNum}</div>
                     </div>
-                    <button onClick={()=>setBdModal(m)} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,padding:"5px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}><Icon name="whatsapp" size={12}/>Parabéns</button>
+                    <button onClick={()=>setLsBdModal(m)} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,padding:"5px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}><Icon name="whatsapp" size={12}/>Parabéns</button>
                   </div>
-                ))}
-                {bdModal&&<BirthdayMessageModal member={bdModal} cellName={cell?.name||""} senderName={session.name} senderRole={session.role} onClose={()=>setBdModal(null)}/>}
-              </div>
-            )
-          })()}
+                )
+              })}
+              {lsBdModal&&<BirthdayMessageModal member={lsBdModal} cellName={cell?.name||""} senderName={session.name} senderRole={session.role} onClose={()=>setLsBdModal(null)}/>}
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
             <Stat label="Membros" value={cellMembers.length} color={C.primary} icon="users" sub={cellVisitors.length>0?`+ ${cellVisitors.length} visitantes`:""}/>
             <Stat label="Encontros" value={cellMeetings.length} color={C.gold} icon="meeting"/>
