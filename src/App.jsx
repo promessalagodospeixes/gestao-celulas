@@ -540,6 +540,7 @@ function AdminDashboard({session,logout,showToast}){
     {id:"reports",label:"Relatórios",icon:"bar-chart"},
     {id:"messages",label:"Mensagens",icon:"message"},
     {id:"requests",label:"Solicits.",icon:"inbox"},
+    {id:"studies",label:"Estudos",icon:"star"},
     {id:"logs",label:"Auditoria",icon:"history"},
   ]
   return(
@@ -577,6 +578,7 @@ function AdminDashboard({session,logout,showToast}){
           {tab==="reports"&&<ReportsPanel session={session}/>}
           {tab==="messages"&&<MessagesPanel session={session} showToast={showToast}/>}
           {tab==="requests"&&<AllRequestsPanel session={session} showToast={showToast}/>}
+          {tab==="studies"&&<StudiesPanel session={session} showToast={showToast}/>}
           {tab==="logs"&&<LogsPanel/>}
         </div>
       </div>
@@ -1017,12 +1019,12 @@ function MembersPanel({session,showToast}){
   const[familyField,setFamilyField]=useState(null)
   const[showInviterSearch,setShowInviterSearch]=useState(false)
 
-  const emptyForm={name:"",cpf:"",birth_date:"",age:"",gender:"Masculino",phone:"",email:"",neighborhood:"",cell_id:"",status:"Visitante",baptized:false,baptism_date:"",invited_by:"",father_name:"",mother_name:"",spouse_name:"",photo_url:""}
+  const emptyForm={name:"",cpf:"",birth_date:"",age:"",gender:"Masculino",phone:"",email:"",neighborhood:"",cell_id:"",status:"Visitante",baptized:false,baptism_date:"",invited_by:"",father_name:"",mother_name:"",spouse_name:"",photo_url:"",church_member:false}
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
 
   function openEdit(m){
-    setForm({name:m.name,cpf:m.cpf||"",birth_date:m.birth_date||"",age:m.age||"",gender:m.gender||"Masculino",phone:m.phone||"",email:m.email||"",neighborhood:m.neighborhood||"",cell_id:m.cell_id||"",status:m.status||"Visitante",baptized:m.baptized||false,baptism_date:m.baptism_date||"",invited_by:m.invited_by||"",father_name:m.father_name||"",mother_name:m.mother_name||"",spouse_name:m.spouse_name||"",photo_url:m.photo_url||""})
+    setForm({name:m.name,cpf:m.cpf||"",birth_date:m.birth_date||"",age:m.age||"",gender:m.gender||"Masculino",phone:m.phone||"",email:m.email||"",neighborhood:m.neighborhood||"",cell_id:m.cell_id||"",status:m.status||"Visitante",baptized:m.baptized||false,baptism_date:m.baptism_date||"",invited_by:m.invited_by||"",father_name:m.father_name||"",mother_name:m.mother_name||"",spouse_name:m.spouse_name||"",photo_url:m.photo_url||"",church_member:m.church_member||false})
     setEditing(m.id);setModal(true)
   }
 
@@ -1030,7 +1032,7 @@ function MembersPanel({session,showToast}){
     if(!form.name.trim()){showToast("Nome é obrigatório","error");return}
     if(form.status==="Membro"&&!form.cpf.replace(/\D/g,"")){showToast("CPF obrigatório para Membros","error");return}
     const cpfNorm=form.cpf.replace(/\D/g,"")
-    const payload={name:form.name.trim().toUpperCase(),cpf:cpfNorm||null,age:form.birth_date?calcAge(form.birth_date):(parseInt(form.age)||0),birth_date:form.birth_date||null,gender:form.gender,phone:form.phone,email:form.email,neighborhood:form.neighborhood,cell_id:form.cell_id||null,status:form.status,role:"member",baptized:form.baptized,baptism_date:form.baptized&&form.baptism_date?form.baptism_date:null,invited_by:form.invited_by,father_name:form.father_name,mother_name:form.mother_name,spouse_name:form.spouse_name,photo_url:form.photo_url}
+    const payload={name:form.name.trim().toUpperCase(),cpf:cpfNorm||null,age:form.birth_date?calcAge(form.birth_date):(parseInt(form.age)||0),birth_date:form.birth_date||null,gender:form.gender,phone:form.phone,email:form.email,neighborhood:form.neighborhood,cell_id:form.cell_id||null,status:form.status,role:"member",baptized:form.baptized,baptism_date:form.baptized&&form.baptism_date?form.baptism_date:null,invited_by:form.invited_by,father_name:form.father_name,mother_name:form.mother_name,spouse_name:form.spouse_name,photo_url:form.photo_url,church_member:form.church_member||false}
     if(editing){
       const{error}=await supabase.from("members").update(payload).eq("id",editing)
       if(error){showToast("Erro: "+error.message,"error");return}
@@ -1231,7 +1233,9 @@ function MeetingsPanel({session,showToast}){
   const[commentsModal,setCommentsModal]=useState(null)
   const[editAttModal,setEditAttModal]=useState(null)
   const[preacherSearch,setPreacherSearch]=useState(false)
+  const[studySearch,setStudySearch]=useState(false)
   const[marks,setMarks]=useState({})
+  const{data:studies}=useTable("studies")
   const[saving,setSaving]=useState(false)
   const[cellFilter,setCellFilter]=useState("")
 
@@ -1360,7 +1364,13 @@ function MeetingsPanel({session,showToast}){
         </div>
         {!form.is_general&&<Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"Selecione..."},...myCells.map(c=>({value:c.id,label:c.name}))]} required/>}
         <Inp label="Data" type="date" value={form.date} onChange={f("date")} required/>
-        <Inp label="Tema da Palavra" value={form.theme} onChange={f("theme")} placeholder="Tema do encontro"/>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Tema da Palavra</label>
+          <div style={{display:"flex",gap:8}}>
+            <input value={form.theme} onChange={e=>f("theme")(e.target.value)} placeholder="Tema do encontro" style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
+            <button type="button" onClick={()=>setStudySearch(true)} style={{background:C.gold+"15",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.gold,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,flexShrink:0}}><Icon name="star" size={14}/>Estudos</button>
+          </div>
+        </div>
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Quem passou a Palavra</label>
           <div style={{display:"flex",gap:8}}>
@@ -1426,6 +1436,19 @@ function MeetingsPanel({session,showToast}){
       {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cell_id} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
       {editAttModal&&<EditAttendanceModal date={editAttModal.meeting.date} cellId={editAttModal.meeting.cell_id} items={editAttModal.items} showToast={showToast} onClose={()=>setEditAttModal(null)}/>}
       <MemberSearchModal open={preacherSearch} title="Quem passou a Palavra?" members={members} onSelect={m=>f("preacher")(m.name)} onClose={()=>setPreacherSearch(false)}/>
+      <Modal open={studySearch} onClose={()=>setStudySearch(false)} title="Selecionar Estudo">
+        {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhum estudo cadastrado</p>}
+        {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).map(s=>(
+          <button key={s.id} onClick={()=>{f("theme")(s.title);setStudySearch(false)}} style={{width:"100%",textAlign:"left",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:12,padding:"12px 14px",cursor:"pointer",marginBottom:8,transition:"all 0.1s"}}
+            onMouseOver={e=>e.currentTarget.style.background="#eff6ff"} onMouseOut={e=>e.currentTarget.style.background="#f8fafc"}>
+            <div style={{fontSize:14,fontWeight:700,color:"#0f172a",marginBottom:3}}>{s.title}</div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {s.study_date&&<span style={{fontSize:11,color:"#94a3b8"}}>{fmtDate(s.study_date)}</span>}
+              {s.link&&<span style={{fontSize:11,color:C.primary,fontWeight:600}}>🔗 Tem material</span>}
+            </div>
+          </button>
+        ))}
+      </Modal>
     </div>
   )
 }
@@ -1710,6 +1733,105 @@ function EventsPanel({session,showToast}){
   )
 }
 
+
+// ─── STUDIES PANEL ────────────────────────────────────────────────────────────
+function StudiesPanel({session,showToast}){
+  const{data:studies,loading}=useTable("studies")
+  const{data:cells}=useTable("cells")
+  const[modal,setModal]=useState(false)
+  const[editing,setEditing]=useState(null)
+  const[deleteId,setDeleteId]=useState(null)
+  const emptyForm={title:"",link:"",cell_id:"",study_date:"",description:""}
+  const[form,setForm]=useState(emptyForm)
+  const f=k=>v=>setForm(p=>({...p,[k]:v}))
+  const isAdmin=session?.role==="admin"||session?.role==="supervisor"
+  const myCells=isAdmin?cells:cells.filter(c=>c.id===session?.cell_id)
+  const visibleStudies=isAdmin?studies:studies.filter(s=>!s.cell_id||s.cell_id===session?.cell_id)
+
+  async function save(){
+    if(!form.title.trim()){showToast("Título obrigatório","error");return}
+    const payload={title:form.title.trim(),link:form.link,cell_id:form.cell_id||null,study_date:form.study_date||null,description:form.description,created_by:session.id}
+    if(editing){
+      await supabase.from("studies").update(payload).eq("id",editing)
+      showToast("Estudo atualizado!")
+    }else{
+      await supabase.from("studies").insert(payload)
+      showToast("Estudo cadastrado!")
+    }
+    setModal(false);setEditing(null);setForm(emptyForm)
+  }
+
+  async function del(){
+    await supabase.from("studies").delete().eq("id",deleteId)
+    showToast("Estudo removido");setDeleteId(null)
+  }
+
+  function openEdit(s){
+    setForm({title:s.title,link:s.link||"",cell_id:s.cell_id||"",study_date:s.study_date||"",description:s.description||""})
+    setEditing(s.id);setModal(true)
+  }
+
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:0}}>Estudos 📚</h2>
+        <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Novo</Btn>
+      </div>
+
+      {loading&&<Loader/>}
+      {!loading&&visibleStudies.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 20px"}}>
+          <div style={{fontSize:48,marginBottom:12}}>📚</div>
+          <p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>Nenhum estudo cadastrado</p>
+          <Btn onClick={()=>setModal(true)} icon="plus" style={{marginTop:8}}>Cadastrar primeiro estudo</Btn>
+        </div>
+      )}
+
+      {visibleStudies.map(s=>{
+        const cell=cells.find(c=>c.id===s.cell_id)
+        return(
+          <Card key={s.id} style={{marginBottom:10,borderLeft:`3px solid ${C.primary}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:4}}>{s.title}</div>
+                {s.study_date&&<div style={{fontSize:12,color:"#64748b"}}>📅 {fmtDate(s.study_date)}</div>}
+                {cell?<div style={{fontSize:12,color:"#64748b"}}>🏠 {cell.name}</div>:<div style={{fontSize:12,color:C.gold}}>📢 Todas as células</div>}
+                {s.description&&<p style={{fontSize:12,color:"#64748b",margin:"6px 0 0",lineHeight:1.5}}>{s.description}</p>}
+              </div>
+              <div style={{display:"flex",gap:5,marginLeft:8,flexShrink:0}}>
+                <button onClick={()=>openEdit(s)} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.primary}}><Icon name="edit" size={14}/></button>
+                {isAdmin&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger}}><Icon name="trash" size={14}/></button>}
+              </div>
+            </div>
+            {s.link&&(
+              <a href={s.link} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:C.primary,borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,marginTop:6,boxShadow:`0 2px 8px ${C.primary}40`}}>
+                <Icon name="link" size={14}/>Acessar Estudo
+              </a>
+            )}
+          </Card>
+        )
+      })}
+
+      <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Estudo":"Novo Estudo"}>
+        <Inp label="Tema do Estudo" value={form.title} onChange={f("title")} required placeholder="Ex: Jesus, o Bom Pastor"/>
+        <Inp label="Link do Material" value={form.link} onChange={f("link")} placeholder="https://drive.google.com/..."/>
+        <Inp label="Data (opcional)" type="date" value={form.study_date} onChange={f("study_date")}/>
+        <Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"📢 Todas as células"},...myCells.map(c=>({value:c.id,label:c.name}))]}/>
+        <Textarea label="Descrição (opcional)" value={form.description} onChange={f("description")} placeholder="Breve descrição do estudo..." rows={3}/>
+        <Btn full onClick={save}>{editing?"Salvar Alterações":"Cadastrar Estudo"}</Btn>
+      </Modal>
+
+      {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}>
+        <p style={{color:"#64748b",marginBottom:16}}>Remover este estudo permanentemente?</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Btn variant="ghost" onClick={()=>setDeleteId(null)}>Cancelar</Btn>
+          <Btn variant="danger" onClick={del}>Excluir</Btn>
+        </div>
+      </Modal>}
+    </div>
+  )
+}
+
 function ReportsPanel({session}){
   const{data:members}=useTable("members")
   const{data:cells}=useTable("cells")
@@ -1723,6 +1845,14 @@ function ReportsPanel({session}){
   const birthdays=members.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
   const cellData=cells.map(c=>({name:c.name,type:c.cell_type||"Adultos",count:members.filter(m=>m.cell_id===c.id&&m.status==="Membro").length,visitors:members.filter(m=>m.cell_id===c.id&&m.status==="Visitante").length,goal:c.growth_goal||0,active:c.cell_status!=="Inativa"})).sort((a,b)=>b.count-a.count)
   const genderData=activeMembers.reduce((a,m)=>{a[m.gender||"N/I"]=(a[m.gender||"N/I"]||0)+1;return a},{})
+  const churchMembers=activeMembers.filter(m=>m.church_member===true).length
+  const notChurchMembers=activeMembers.filter(m=>m.church_member!==true).length
+  const cellChurchStats=cells.map(c=>{
+    const mc=members.filter(m=>m.cell_id===c.id&&m.status==="Membro")
+    const inChurch=mc.filter(m=>m.church_member===true).length
+    const notInChurch=mc.filter(m=>m.church_member!==true).length
+    return{name:c.name,type:c.cell_type||"Adultos",total:mc.length,inChurch,notInChurch,pct:mc.length>0?Math.round(inChurch/mc.length*100):0}
+  }).filter(c=>c.total>0).sort((a,b)=>b.total-a.total)
   const typeData=activeMembers.reduce((a,m)=>{const cell=cells.find(c=>c.id===m.cell_id);const t=cell?.cell_type||"Sem célula";a[t]=(a[t]||0)+1;return a},{})
   const attByMember={}
   attendance.forEach(a=>{if(!attByMember[a.member_id])attByMember[a.member_id]={name:a.member_name,total:0,present:0};attByMember[a.member_id].total++;if(a.status==="Presente")attByMember[a.member_id].present++})
@@ -1769,6 +1899,36 @@ function ReportsPanel({session}){
         {Object.entries(genderData).map(([k,v])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:"#334155",minWidth:80}}>{k}</span><Bar value={v} max={activeMembers.length} color={C.primary}/><span style={{fontSize:12,fontWeight:700,color:C.primary,minWidth:24,textAlign:"right"}}>{v}</span></div>))}
       </Card>
 
+      <Card style={{marginBottom:14,border:"1px solid #bfdbfe",background:"#eff6ff"}}>
+        <h3 style={{fontSize:14,fontWeight:800,color:C.primary,marginBottom:14}}>⛪ Membros da Promessa Lago dos Peixes</h3>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div style={{background:"#fff",borderRadius:12,padding:"12px",textAlign:"center",border:`1px solid ${C.primary}20`}}>
+            <div style={{fontSize:28,fontWeight:900,color:C.primary}}>{churchMembers}</div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em",marginTop:4}}>São membros</div>
+            <div style={{fontSize:12,color:C.primary,fontWeight:700,marginTop:2}}>{activeMembers.length>0?Math.round(churchMembers/activeMembers.length*100):0}%</div>
+          </div>
+          <div style={{background:"#fff",borderRadius:12,padding:"12px",textAlign:"center",border:"1px solid #fecaca"}}>
+            <div style={{fontSize:28,fontWeight:900,color:C.danger}}>{notChurchMembers}</div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em",marginTop:4}}>Não são membros</div>
+            <div style={{fontSize:12,color:C.danger,fontWeight:700,marginTop:2}}>{activeMembers.length>0?Math.round(notChurchMembers/activeMembers.length*100):0}%</div>
+          </div>
+        </div>
+        <h4 style={{fontSize:13,fontWeight:800,color:"#0f172a",marginBottom:10}}>Por Célula</h4>
+        {cellChurchStats.map(c=>(
+          <div key={c.name} style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+              <div><span style={{fontSize:13,fontWeight:700,color:"#334155"}}>{c.name}</span><span style={{fontSize:11,color:"#94a3b8",marginLeft:6}}>{c.total} membros</span></div>
+              <div style={{display:"flex",gap:8}}>
+                <span style={{fontSize:12,fontWeight:700,color:C.primary}}>✅ {c.inChurch} ({c.pct}%)</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.danger}}>❌ {c.notInChurch}</span>
+              </div>
+            </div>
+            <div style={{height:8,background:"#f1f5f9",borderRadius:4,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${c.pct}%`,background:C.primary,borderRadius:4,transition:"width 0.6s"}}/>
+            </div>
+          </div>
+        ))}
+      </Card>
       <Card style={{marginBottom:14}}>
         <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:12}}>Por Tipo de Célula</h3>
         {Object.entries(typeData).map(([k,v])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:"#334155",minWidth:100}}>{k}</span><Bar value={v} max={activeMembers.length} color={C.gold}/><span style={{fontSize:12,fontWeight:700,color:C.gold,minWidth:24,textAlign:"right"}}>{v}</span></div>))}
@@ -1995,6 +2155,7 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
     {id:"reports",icon:"bar-chart",label:"Relatórios",desc:"Frequência e dados",color:C.gold},
     {id:"messages",icon:"message",label:"Mensagens",desc:"Comunicados",color:"#0891b2"},
     {id:"requests",icon:"inbox",label:"Solicitações",desc:"Inativações e alterações",color:C.danger},
+    {id:"studies",icon:"star",label:"Estudos",desc:"Material de estudo",color:C.primary},
   ]
 
   function renderSub(){
@@ -2005,6 +2166,7 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
     if(sub==="reports")return<ReportsPanel session={session}/>
     if(sub==="messages")return<MessagesPanel session={session} showToast={showToast}/>
     if(sub==="requests")return<AllRequestsPanel session={session} showToast={showToast}/>
+    if(sub==="studies")return<StudiesPanel session={session} showToast={showToast}/>
     return null
   }
 
