@@ -44,6 +44,26 @@ function getNextMeetingDate(day){
   next.setDate(today.getDate()+(diff===0?7:diff))
   return next.toISOString().split("T")[0]
 }
+function getWeekRange(date=new Date()){
+  const d=new Date(date)
+  const day=d.getDay() // 0=Sun
+  const sun=new Date(d);sun.setDate(d.getDate()-day)
+  const sat=new Date(sun);sat.setDate(sun.getDate()+6)
+  const fmt=d=>d.toISOString().split("T")[0]
+  return{start:fmt(sun),end:fmt(sat)}
+}
+
+function isCurrentWeek(weekStart,weekEnd){
+  if(!weekStart||!weekEnd)return false
+  const today=todayStr()
+  return today>=weekStart&&today<=weekEnd
+}
+
+function fmtWeek(start,end){
+  if(!start||!end)return""
+  return`${fmtDate(start)} a ${fmtDate(end)}`
+}
+
 function getAgeGroup(age){
   if(!age)return null
   if(age<=10)return{label:"Criança",color:"#06b6d4",icon:"🧒"}
@@ -1557,17 +1577,22 @@ function MeetingsPanel({session,showToast}){
       {editAttModal&&<EditAttendanceModal date={editAttModal.meeting.date} cellId={editAttModal.meeting.cell_id} items={editAttModal.items} showToast={showToast} onClose={()=>setEditAttModal(null)}/>}
       <MemberSearchModal open={preacherSearch} title="Quem passou a Palavra?" members={members} onSelect={m=>f("preacher")(m.name)} onClose={()=>setPreacherSearch(false)}/>
       <Modal open={studySearch} onClose={()=>setStudySearch(false)} title="Selecionar Estudo">
-        {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhum estudo cadastrado</p>}
-        {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).map(s=>(
-          <button key={s.id} onClick={()=>{f("theme")(s.title);setStudySearch(false)}} style={{width:"100%",textAlign:"left",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:12,padding:"12px 14px",cursor:"pointer",marginBottom:8,transition:"all 0.1s"}}
-            onMouseOver={e=>e.currentTarget.style.background="#eff6ff"} onMouseOut={e=>e.currentTarget.style.background="#f8fafc"}>
-            <div style={{fontSize:14,fontWeight:700,color:"#0f172a",marginBottom:3}}>{s.title}</div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              {s.study_date&&<span style={{fontSize:11,color:"#94a3b8"}}>{fmtDate(s.study_date)}</span>}
-              {s.link&&<span style={{fontSize:11,color:C.primary,fontWeight:600}}>🔗 Tem material</span>}
-            </div>
-          </button>
-        ))}
+        {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhum estudo cadastrado. Cadastre em Estudos primeiro.</p>}
+        {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).sort((a,b)=>{const aA=isCurrentWeek(a.week_start,a.week_end)?1:0;const bA=isCurrentWeek(b.week_start,b.week_end)?1:0;return bA-aA}).map(s=>{
+          const current=isCurrentWeek(s.week_start,s.week_end)
+          return(
+            <button key={s.id} onClick={()=>{f("theme")(s.title);setStudySearch(false)}} style={{width:"100%",textAlign:"left",background:current?C.gold+"08":"#f8fafc",border:`1.5px solid ${current?C.gold:"#e8edf2"}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",marginBottom:8,transition:"all 0.1s"}}
+              onMouseOver={e=>e.currentTarget.style.background=current?C.gold+"15":"#eff6ff"} onMouseOut={e=>e.currentTarget.style.background=current?C.gold+"08":"#f8fafc"}>
+              {current&&<div style={{fontSize:10,fontWeight:800,color:C.gold,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>✦ Estudo desta semana</div>}
+              <div style={{fontSize:14,fontWeight:700,color:"#0f172a",marginBottom:3}}>{s.title}</div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                {s.week_start&&s.week_end&&<span style={{fontSize:11,color:"#94a3b8"}}>{fmtWeek(s.week_start,s.week_end)}</span>}
+                {s.link&&<span style={{fontSize:11,color:C.primary,fontWeight:600}}>🔗 Material disponível</span>}
+                {s.link_kids&&<span style={{fontSize:11,color:C.gold,fontWeight:600}}>👧 Kids disponível</span>}
+              </div>
+            </button>
+          )
+        })}
       </Modal>
     </div>
   )
@@ -1861,16 +1886,24 @@ function StudiesPanel({session,showToast}){
   const[modal,setModal]=useState(false)
   const[editing,setEditing]=useState(null)
   const[deleteId,setDeleteId]=useState(null)
-  const emptyForm={title:"",link:"",link_kids:"",cell_id:"",study_date:"",description:""}
+  const{start:ws,end:we}=getWeekRange()
+  const emptyForm={title:"",link:"",link_kids:"",cell_id:"",week_start:ws,week_end:we,description:""}
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
   const isAdmin=session?.role==="admin"||session?.role==="supervisor"
   const myCells=isAdmin?cells:cells.filter(c=>c.id===session?.cell_id)
-  const visibleStudies=isAdmin?studies:studies.filter(s=>!s.cell_id||s.cell_id===session?.cell_id)
+  const visibleStudies=(isAdmin?studies:studies.filter(s=>!s.cell_id||s.cell_id===session?.cell_id))
+    .sort((a,b)=>{
+      const aActive=isCurrentWeek(a.week_start,a.week_end)?1:0
+      const bActive=isCurrentWeek(b.week_start,b.week_end)?1:0
+      if(bActive!==aActive)return bActive-aActive
+      if(a.week_start&&b.week_start)return b.week_start.localeCompare(a.week_start)
+      return 0
+    })
 
   async function save(){
     if(!form.title.trim()){showToast("Título obrigatório","error");return}
-    const payload={title:form.title.trim(),link:form.link,link_kids:form.link_kids||null,cell_id:form.cell_id||null,study_date:form.study_date||null,description:form.description,created_by:session.id}
+    const payload={title:form.title.trim(),link:form.link,link_kids:form.link_kids||null,cell_id:form.cell_id||null,week_start:form.week_start||null,week_end:form.week_end||null,description:form.description,created_by:session.id}
     if(editing){
       await supabase.from("studies").update(payload).eq("id",editing)
       showToast("Estudo atualizado!")
@@ -1887,7 +1920,7 @@ function StudiesPanel({session,showToast}){
   }
 
   function openEdit(s){
-    setForm({title:s.title,link:s.link||"",link_kids:s.link_kids||"",cell_id:s.cell_id||"",study_date:s.study_date||"",description:s.description||""})
+    setForm({title:s.title,link:s.link||"",link_kids:s.link_kids||"",cell_id:s.cell_id||"",week_start:s.week_start||"",week_end:s.week_end||"",description:s.description||""})
     setEditing(s.id);setModal(true)
   }
 
@@ -1914,7 +1947,11 @@ function StudiesPanel({session,showToast}){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:4}}>{s.title}</div>
-                {s.study_date&&<div style={{fontSize:12,color:"#64748b"}}>📅 {fmtDate(s.study_date)}</div>}
+                {(s.week_start&&s.week_end)&&(
+                  <div style={{display:"inline-flex",alignItems:"center",gap:5,background:isCurrentWeek(s.week_start,s.week_end)?C.gold+"20":"#f1f5f9",border:`1px solid ${isCurrentWeek(s.week_start,s.week_end)?C.gold:"#e2e8f0"}`,borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,color:isCurrentWeek(s.week_start,s.week_end)?C.gold:"#64748b"}}>
+                    📅 {fmtWeek(s.week_start,s.week_end)}{isCurrentWeek(s.week_start,s.week_end)&&" ✦ Esta semana"}
+                  </div>
+                )}
                 {cell?<div style={{fontSize:12,color:"#64748b"}}>🏠 {cell.name}</div>:<div style={{fontSize:12,color:C.gold}}>📢 Todas as células</div>}
                 {s.description&&<p style={{fontSize:12,color:"#64748b",margin:"6px 0 0",lineHeight:1.5}}>{s.description}</p>}
               </div>
@@ -1943,7 +1980,14 @@ function StudiesPanel({session,showToast}){
         <Inp label="Tema do Estudo" value={form.title} onChange={f("title")} required placeholder="Ex: Jesus, o Bom Pastor"/>
         <Inp label="Link do Material" value={form.link} onChange={f("link")} placeholder="https://drive.google.com/..."/>
         <Inp label="Link Kids 👧" value={form.link_kids} onChange={f("link_kids")} placeholder="https://drive.google.com/... (versão para crianças)"/>
-        <Inp label="Data (opcional)" type="date" value={form.study_date} onChange={f("study_date")}/>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:6,letterSpacing:"0.05em",textTransform:"uppercase"}}>Semana de Vigência</label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div><label style={{display:"block",fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600}}>Início (Domingo)</label><input type="date" value={form.week_start||""} onChange={e=>f("week_start")(e.target.value)} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:13,outline:"none"}}/></div>
+            <div><label style={{display:"block",fontSize:10,color:"#94a3b8",marginBottom:4,fontWeight:600}}>Fim (Sábado)</label><input type="date" value={form.week_end||""} onChange={e=>f("week_end")(e.target.value)} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:13,outline:"none"}}/></div>
+          </div>
+          {form.week_start&&form.week_end&&<p style={{fontSize:11,color:C.primary,marginTop:6,fontWeight:600}}>📅 Semana de {fmtWeek(form.week_start,form.week_end)}</p>}
+        </div>
         <Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"📢 Todas as células"},...myCells.map(c=>({value:c.id,label:c.name}))]}/>
         <Textarea label="Descrição (opcional)" value={form.description} onChange={f("description")} placeholder="Breve descrição do estudo..." rows={3}/>
         <Btn full onClick={save}>{editing?"Salvar Alterações":"Cadastrar Estudo"}</Btn>
