@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual — Gestão de Células | Promessa Lago dos Peixes</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #1B4F8A;
+    --gold: #E8921A;
+    --dark: #0f172a;
+    --light: #f0f4f8;
+    --white: #ffffff;
+    --success: #059669;
+    --text: #334155;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: var(--light); color: var(--text); }
+
+  /* HEADER */
+  .hero {
+    background: linear-gradient(135deg, var(--dark) 0%, var(--blue) 100%);
+    padding: 48px 24px 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    width: 300px; height: 300px;
+    background: var(--gold);
+    opacity: 0.06;
+    border-radius: 50%;
+    top: -100px; right: -80px;
+  }
+  .hero-logo {
+    width: 72px; height: 72px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    font-size: 36px;
+  }
+  .hero h1 { color: #fff; font-size: 24px; font-weight: 900; margin-bottom: 8px; }
+  .hero p { color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 500; }
+  .hero-badge {
+    display: inline-block;
+    background: var(--gold);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-top: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* NAV PILLS */
+  .nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 16px 20px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--muted);
+    background: var(--light);
+    border: 1.5px solid #e2e8f0;
+    transition: all 0.15s;
+  }
+  .nav a:hover, .nav a.active {
+    background: var(--blue);
+    color: #fff;
+    border-color: var(--blue);
+  }
+
+  /* CONTENT */
+  .content { max-width: 680px; margin: 0 auto; padding: 24px 20px 60px; }
+
+  /* SECTIONS */
+  .section { margin-bottom: 40px; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--blue);
+  }
+  .section-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .section-title { font-size: 20px; font-weight: 900; color: var(--dark); }
+  .section-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  /* CARDS */
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 18px;
+    border: 1px solid #e8edf2;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--dark);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card p { font-size: 14px; color: var(--text); line-height: 1.65; }
+
+  /* STEPS */
+  .steps { display: flex; flex-direction: column; gap: 12px; }
+  .step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .step-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--blue);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-content { flex: 1; }
+  .step-content strong { display: block; font-size: 14px; font-weight: 800; color: var(--dark); margin-bottom: 4px; }
+  .step-content p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  /* TIPS */
+  .tip {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .tip-icon { font-size: 20px; flex-shrink: 0; }
+  .tip p { font-size: 13px; color: #92400e; line-height: 1.65; font-weight: 500; }
+  .tip strong { font-weight: 800; }
+
+  /* IMPORTANT */
+  .important {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 10px;
+  }
+  .important p { font-size: 13px; color: #1e40af; line-height: 1.65; font-weight: 500; }
+
+  /* ROLES */
+  .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .role-card {
+    border-radius: 14px;
+    padding: 16px;
+    border: 1.5px solid;
+  }
+  .role-card .role-name { font-size: 14px; font-weight: 800; margin-bottom: 8px; }
+  .role-card ul { padding-left: 16px; }
+  .role-card ul li { font-size: 12px; line-height: 1.8; }
+
+  /* FIELDS */
+  .field-list { display: flex; flex-direction: column; gap: 8px; }
+  .field {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px solid #f1f5f9;
+  }
+  .field-badge {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .badge-req { background: #fee2e2; color: #991b1b; }
+  .badge-opt { background: #f0fdf4; color: #166534; }
+  .field-info strong { display: block; font-size: 13px; font-weight: 700; color: var(--dark); }
+  .field-info p { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+
+  /* TABS PREVIEW */
+  .tab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tab-item {
+    border-radius: 14px;
+    padding: 14px;
+    border: 1.5px solid;
+    cursor: default;
+  }
+  .tab-item .tab-icon { font-size: 24px; margin-bottom: 8px; }
+  .tab-item .tab-name { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+  .tab-item .tab-desc { font-size: 12px; line-height: 1.5; }
+
+  /* HIGHLIGHT BOX */
+  .highlight {
+    background: linear-gradient(135deg, var(--blue), #1a5fa8);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    color: #fff;
+  }
+  .highlight h3 { font-size: 16px; font-weight: 900; margin-bottom: 8px; }
+  .highlight p { font-size: 13px; color: rgba(255,255,255,0.85); line-height: 1.65; }
+
+  /* DIVIDER */
+  .divider { height: 1px; background: #e2e8f0; margin: 28px 0; }
+
+  /* CTA */
+  .cta {
+    background: linear-gradient(135deg, var(--gold), #c97b10);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    margin-top: 32px;
+  }
+  .cta h3 { color: #fff; font-size: 18px; font-weight: 900; margin-bottom: 8px; }
+  .cta p { color: rgba(255,255,255,0.85); font-size: 14px; margin-bottom: 16px; }
+  .cta a {
+    display: inline-block;
+    background: #fff;
+    color: var(--gold);
+    font-weight: 800;
+    font-size: 15px;
+    padding: 12px 28px;
+    border-radius: 12px;
+    text-decoration: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+
+  @media (max-width: 480px) {
+    .roles { grid-template-columns: 1fr; }
+    .tab-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-logo">🔥</div>
+  <h1>Gestão de Células</h1>
+  <p>Manual do Líder e Secretário</p>
+  <div class="hero-badge">Promessa Lago dos Peixes</div>
+</div>
+
+<nav class="nav">
+  <a href="#acesso" class="active">🔑 Acesso</a>
+  <a href="#perfis">👤 Perfis</a>
+  <a href="#membros">👥 Membros</a>
+  <a href="#encontros">📅 Encontros</a>
+  <a href="#presenca">✅ Presença</a>
+  <a href="#estudos">📚 Estudos</a>
+  <a href="#oracao">🙏 Oração</a>
+  <a href="#portal">📱 Portal</a>
+  <a href="#dicas">💡 Dicas</a>
+</nav>
+
+<div class="content">
+
+  <!-- BOAS VINDAS -->
+  <div class="highlight" style="margin-top: 24px;">
+    <h3>👋 Bem-vindo ao sistema!</h3>
+    <p>Este manual foi feito especialmente para líderes e secretários. Aqui você vai aprender a usar cada função do sistema para gerenciar sua célula com excelência. O sistema funciona no celular e no computador!</p>
+  </div>
+
+  <!-- ACESSO -->
+  <div class="section" id="acesso">
+    <div class="section-header">
+      <div class="section-icon" style="background:#eff6ff;">🔑</div>
+      <div>
+        <div class="section-title">Como Acessar</div>
+        <div class="section-sub">Login e senha</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌐 Endereço do sistema</div>
+      <p>Acesse pelo celular ou computador:</p>
+      <div style="background:#f8fafc;border-radius:10px;padding:12px 16px;margin-top:10px;text-align:center;font-size:15px;font-weight:800;color:#1B4F8A;border:1.5px solid #bfdbfe;">
+        celula.promessalagodospeixes.com.br
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔐 Como fazer login</div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <strong>Digite seu CPF, telefone ou e-mail</strong>
+            <p>Você pode entrar com qualquer um dos três que estiver cadastrado no sistema.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <strong>Digite sua senha</strong>
+            <p>A senha padrão inicial é <strong>123456</strong>. Troque assim que entrar pela primeira vez em Configurações → Alterar Senha.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <strong>Aceite os termos na primeira vez</strong>
+            <p>Na primeira vez que entrar, aparecerá a Política de Dados (LGPD). Leia e marque as opções para continuar.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <p><strong>Dica:</strong> O sistema lembra do seu login! Não precisa entrar toda vez. Só vai precisar logar novamente se clicar em "Sair".</p>
+    </div>
+  </div>
+
+  <!-- PERFIS -->
+  <div class="section" id="perfis">
+    <div class="section-header">
+      <div class="section-icon" style="background:#f0fdf4;">👤</div>
+      <div>
+        <div class="section-title">Perfis de Acesso</div>
+        <div class="section-sub">O que cada um pode fazer</div>
+      </div>
+    </div>
+
+    <div class="roles">
+      <div class="role-card" style="border-color:#059669;background:#f0fdf4;">
+        <div class="role-name" style="color:#059669;">👑 Líder</div>
+        <ul style="color:#166534;">
+          <li>Cadastrar membros</li>
+          <li>Registrar encontros</li>
+          <li>Fazer chamada</li>
+          <li>Ver estudos</li>
+          <li>Ver pedidos de oração</li>
+          <li>Enviar mensagens</li>
+          <li>Solicitar alterações</li>
+        </ul>
+      </div>
+      <div class="role-card" style="border-color:#E8921A;background:#fffbeb;">
+        <div class="role-name" style="color:#E8921A;">📋 Secretário</div>
+        <ul style="color:#92400e;">
+          <li>Cadastrar membros</li>
+          <li>Registrar encontros</li>
+          <li>Fazer chamada</li>
+          <li>Ver estudos</li>
+          <li>Ver pedidos de oração</li>
+          <li>Enviar mensagens</li>
+          <li>Solicitar alterações</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="important" style="margin-top:12px;">
+      <p>⚠️ <strong>Importante:</strong> Você só vê informações da sua própria célula. Dados de outras células não aparecem para você.</p>
+    </div>
+  </div>
+
+  <!-- MEMBROS -->
+  <div class="section" id="membros">
+    <div class="section-header">
+      <div class="section-icon" style="background:#eff6ff;">👥</div>
+      <div>
+        <div class="section-title">Cadastro de Membros</div>
+        <div class="section-sub">Como cadastrar pessoas da sua célula</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">➕ Como cadastrar</div>
+      <p>Na aba <strong>Membros (Pessoas)</strong>, clique no botão <strong>"+ Novo"</strong> no canto superior direito.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📝 Campos do cadastro</div>
+      <div class="field-list">
+        <div class="field">
+          <div class="field-badge badge-req">Obrigatório</div>
+          <div class="field-info"><strong>Nome Completo</strong><p>Pelo menos nome e sobrenome. Ex: Maria Silva</p></div>
+        </div>
+        <div class="field">
+          <div class="field-badge badge-req">Obrigatório</div>
+          <div class="field-info"><strong>Telefone (WhatsApp)</strong><p>Número com DDD. Ex: (21) 99999-0000. Permite contato direto pelo WhatsApp.</p></div>
+        </div>
+        <div class="field">
+          <div class="field-badge badge-opt">Opcional</div>
+          <div class="field-info"><strong>Data de Nascimento</strong><p>Preencha sempre que possível — gera alertas de aniversário automáticos!</p></div>
+        </div>
+        <div class="field">
+          <div class="field-badge badge-opt">Opcional</div>
+          <div class="field-info"><strong>CPF</strong><p>Necessário apenas para quem vai acessar o sistema (líderes, secretários). Membros e visitantes não precisam.</p></div>
+        </div>
+        <div class="field">
+          <div class="field-badge badge-opt">Opcional</div>
+          <div class="field-info"><strong>E-mail, Bairro, Batismo</strong><p>Preencha conforme for coletando as informações. Não precisa tudo de uma vez!</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">🙋</div>
+      <p><strong>Visitante apareceu na célula hoje?</strong> Cadastre já! Nome e telefone são suficientes para começar. Você pode completar os outros dados depois.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 Status da pessoa</div>
+      <p>Use <strong>"Visitante"</strong> para quem está conhecendo a célula, e <strong>"Membro"</strong> para quem já faz parte. Visitantes não entram na meta de crescimento da célula.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⛪ Membro da Igreja</div>
+      <p>No cadastro há uma pergunta <em>"Membro da Promessa Lago dos Peixes?"</em>. Marque <strong>Sim</strong> para quem já é membro da igreja, e <strong>Não</strong> para quem frequenta a célula mas ainda não é membro. Isso ajuda a acompanhar o crescimento da comunidade.</p>
+    </div>
+  </div>
+
+  <!-- ENCONTROS -->
+  <div class="section" id="encontros">
+    <div class="section-header">
+      <div class="section-icon" style="background:#f0fdf4;">📅</div>
+      <div>
+        <div class="section-title">Registrar Encontros</div>
+        <div class="section-sub">Como registrar cada reunião da célula</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🆕 Criando um encontro</div>
+      <p>Na aba <strong>Encontros</strong>, clique em <strong>"+ Novo Encontro"</strong>. Preencha os dados e clique em <strong>"Salvar e Fazer Chamada →"</strong>. A tela de chamada abre automaticamente!</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Selecione a data</strong>
+          <p>A data de hoje já vem preenchida. Ajuste se necessário.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Tema da Palavra</strong>
+          <p>Clique no botão <strong>"📚 Estudos"</strong> para selecionar o estudo da semana cadastrado. Ou digite manualmente.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Quem passou a Palavra</strong>
+          <p>Clique na lupa 🔍 para buscar o nome entre os membros cadastrados.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>Músicas e fotos (opcional)</strong>
+          <p>Liste as músicas cantadas e cole o link das fotos do encontro se tiver.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <strong>Faça a chamada</strong>
+          <p>Aparece a lista de todos da célula. Marque <strong>✓ Presente</strong>, <strong>✗ Ausente</strong> ou <strong>? Justificado</strong> para cada um.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">⏭️</div>
+      <p><strong>Sem tempo para a chamada agora?</strong> Clique em <strong>"Pular"</strong> e faça a chamada depois clicando em <strong>"Registrar Presença"</strong> no encontro salvo.</p>
+    </div>
+  </div>
+
+  <!-- PRESENÇA -->
+  <div class="section" id="presenca">
+    <div class="section-header">
+      <div class="section-icon" style="background:#dcfce7;">✅</div>
+      <div>
+        <div class="section-title">Presença</div>
+        <div class="section-sub">Chamada e histórico</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Como funciona</div>
+      <p>Todos os membros e visitantes da sua célula aparecem na chamada. Marque cada um como <strong>Presente</strong>, <strong>Ausente</strong> ou <strong>Justificado</strong>. O sistema calcula a frequência automaticamente.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">✏️ Errou? Corrija!</div>
+      <p>No histórico de encontros, clique em <strong>"Editar Presença"</strong> para corrigir qualquer marcação errada.</p>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">💬</div>
+      <p><strong>Incentive comentários!</strong> Após o encontro, peça para os membros abrirem o app e comentarem sobre a reunião. Isso cria memória e engajamento na célula.</p>
+    </div>
+  </div>
+
+  <!-- ESTUDOS -->
+  <div class="section" id="estudos">
+    <div class="section-header">
+      <div class="section-icon" style="background:#fef3c7;">📚</div>
+      <div>
+        <div class="section-title">Estudos</div>
+        <div class="section-sub">Material de estudo semanal</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📖 O que são os estudos?</div>
+      <p>O gestor cadastra o material de estudo de cada semana. Você e seus membros podem acessar o link do estudo direto pelo app.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🗓️ Semana de vigência</div>
+      <p>Cada estudo tem uma semana de validade — de Domingo a Sábado. O <strong>estudo da semana atual</strong> aparece sempre em destaque no topo, com um badge dourado <strong>"✦ Esta semana"</strong>.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">👧 Estudo Kids</div>
+      <p>Alguns estudos têm uma versão especial para crianças. Aparece como um botão laranja <strong>"👧 Estudo Kids"</strong>. Use para células que têm crianças presentes.</p>
+    </div>
+
+    <div class="important">
+      <p>📌 <strong>Na hora de criar o encontro</strong>, clique no botão <strong>"📚 Estudos"</strong> ao lado do campo "Tema da Palavra". O estudo da semana já aparece destacado para você selecionar com um clique!</p>
+    </div>
+  </div>
+
+  <!-- ORAÇÃO -->
+  <div class="section" id="oracao">
+    <div class="section-header">
+      <div class="section-icon" style="background:#f5f3ff;">🙏</div>
+      <div>
+        <div class="section-title">Pedidos de Oração</div>
+        <div class="section-sub">Acompanhando a vida espiritual da célula</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🙏 Como funciona</div>
+      <p>Qualquer membro da célula pode registrar um pedido de oração pelo aplicativo. Você, como líder ou secretário, vê todos os pedidos da sua célula.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔒 Pedidos Privados</div>
+      <p>O membro pode marcar o pedido como <strong>Privado</strong>. Nesse caso, apenas você (líder/secretário) e o gestor conseguem ver. Os outros membros da célula não veem.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">✓ Marcar como Orado</div>
+      <p>Quando você orar pelo pedido, clique em <strong>"Marcar como Orado"</strong>. Isso encoraja quem fez o pedido e mostra que a célula se importa!</p>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">❤️</div>
+      <p><strong>Incentive sua célula!</strong> No início ou fim do encontro, lembre os membros que eles podem registrar pedidos de oração pelo app a qualquer momento.</p>
+    </div>
+  </div>
+
+  <!-- PORTAL DO MEMBRO -->
+  <div class="section" id="portal">
+    <div class="section-header">
+      <div class="section-icon" style="background:#eff6ff;">📱</div>
+      <div>
+        <div class="section-title">Portal do Membro</div>
+        <div class="section-sub">O que seus membros veem no app</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📲 Como o membro acessa</div>
+      <p>O membro acessa pelo mesmo endereço com o telefone ou e-mail cadastrado e a senha <strong>123456</strong> (padrão). Ele deve trocar a senha no primeiro acesso.</p>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">⚠️</div>
+      <p><strong>Atenção:</strong> Visitantes sem CPF cadastrado <strong>não têm acesso</strong> ao sistema. Apenas membros com telefone ou e-mail cadastrado conseguem entrar.</p>
+    </div>
+
+    <p style="font-size:14px;color:var(--text);margin-bottom:12px;">O membro vê 4 abas no app:</p>
+
+    <div class="tab-grid">
+      <div class="tab-item" style="border-color:#1B4F8A;background:#eff6ff;">
+        <div class="tab-icon">👤</div>
+        <div class="tab-name" style="color:#1B4F8A;">Meus Dados</div>
+        <div class="tab-desc" style="color:#3b82f6;">Seus dados pessoais e informações de família.</div>
+      </div>
+      <div class="tab-item" style="border-color:#059669;background:#f0fdf4;">
+        <div class="tab-icon">🏠</div>
+        <div class="tab-name" style="color:#059669;">Minha Célula</div>
+        <div class="tab-desc" style="color:#059669;">Dados da célula, nome do líder e contato direto pelo WhatsApp.</div>
+      </div>
+      <div class="tab-item" style="border-color:#E8921A;background:#fffbeb;">
+        <div class="tab-icon">✅</div>
+        <div class="tab-name" style="color:#E8921A;">Presença</div>
+        <div class="tab-desc" style="color:#92400e;">Histórico de presenças e frequência pessoal.</div>
+      </div>
+      <div class="tab-item" style="border-color:#7c3aed;background:#f5f3ff;">
+        <div class="tab-icon">🙏</div>
+        <div class="tab-name" style="color:#7c3aed;">Oração</div>
+        <div class="tab-desc" style="color:#7c3aed;">Registrar e acompanhar pedidos de oração.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DICAS FINAIS -->
+  <div class="section" id="dicas">
+    <div class="section-header">
+      <div class="section-icon" style="background:#fef3c7;">💡</div>
+      <div>
+        <div class="section-title">Dicas Importantes</div>
+        <div class="section-sub">Para aproveitar ao máximo o sistema</div>
+      </div>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">📸</div>
+      <p><strong>Fotos do encontro?</strong> Suba no Google Fotos ou Google Drive e cole o link no campo "Link das Fotos" ao registrar o encontro. Os membros poderão acessar!</p>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">🎂</div>
+      <p><strong>Aniversariantes!</strong> O sistema avisa automaticamente quando alguém da sua célula faz aniversário na semana. Clique em "Parabéns" para enviar uma mensagem personalizada pelo WhatsApp com um clique!</p>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">📊</div>
+      <p><strong>Acompanhe os números!</strong> Na aba Relatórios você vê a frequência de cada membro, quem está se afastando e o progresso em direção à meta da célula.</p>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">🔄</div>
+      <p><strong>Dados incompletos?</strong> Não tem problema! Cadastre com o que tiver (nome + telefone) e complete depois. É melhor ter um cadastro incompleto do que não ter nenhum.</p>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">🆘</div>
+      <p><strong>Precisa de ajuda ou encontrou um erro?</strong> Fale com o gestor Gabriel Pereira.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="cta">
+      <h3>🚀 Pronto para começar?</h3>
+      <p>Acesse o sistema agora e comece a gerenciar sua célula!</p>
+      <a href="https://celula.promessalagodospeixes.com.br" target="_blank">Acessar o Sistema →</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Highlight nav on scroll
+  const sections = document.querySelectorAll('.section')
+  const navLinks = document.querySelectorAll('.nav a')
+  window.addEventListener('scroll', () => {
+    let current = ''
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 100) current = s.id
+    })
+    navLinks.forEach(a => {
+      a.classList.remove('active')
+      if (a.getAttribute('href') === '#' + current) a.classList.add('active')
+    })
+  })
+</script>
+</body>
+</html>
