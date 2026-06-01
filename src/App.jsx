@@ -1362,7 +1362,12 @@ function MeetingsPanel({session,showToast}){
             <span style={{fontSize:13,fontWeight:700,color:form.is_general?C.gold:"#334155"}}>🔥 Celulão — Encontro Geral</span>
           </label>
         </div>
-        {!form.is_general&&<Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"Selecione..."},...myCells.map(c=>({value:c.id,label:c.name}))]} required/>}
+        {!form.is_general&&(myCells.length===1?
+          <div style={{marginBottom:14,background:`${C.primary}08`,border:`1px solid ${C.primary}20`,borderRadius:12,padding:"10px 14px",fontSize:13,fontWeight:700,color:C.primary}}>
+            🏠 {myCells[0].name}
+          </div>
+          :<Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"Selecione..."},...myCells.map(c=>({value:c.id,label:c.name}))]} required/>
+        )}
         <Inp label="Data" type="date" value={form.date} onChange={f("date")} required/>
         <div style={{marginBottom:14}}>
           <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Tema da Palavra</label>
