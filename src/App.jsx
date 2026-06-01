@@ -44,6 +44,14 @@ function getNextMeetingDate(day){
   next.setDate(today.getDate()+(diff===0?7:diff))
   return next.toISOString().split("T")[0]
 }
+function getAgeGroup(age){
+  if(!age)return null
+  if(age<=10)return{label:"Criança",color:"#06b6d4",icon:"🧒"}
+  if(age<=15)return{label:"Adolescente",color:"#8b5cf6",icon:"🧑"}
+  if(age<=22)return{label:"Jovem",color:"#10b981",icon:"👦"}
+  return{label:"Adulto",color:"#1B4F8A",icon:"👤"}
+}
+
 function whatsappLink(phone,name=""){
   const n=phone?.replace(/\D/g,"");
   if(!n)return null;
@@ -1057,6 +1065,7 @@ function MembersPanel({session,showToast}){
   const[search,setSearch]=useState("")
   const[filterStatus,setFilterStatus]=useState("")
   const[filterCell,setFilterCell]=useState("")
+  const[filterAge,setFilterAge]=useState("")
   const[cardModal,setCardModal]=useState(null)
   const[showFamilySearch,setShowFamilySearch]=useState(false)
   const[familyField,setFamilyField]=useState(null)
@@ -1113,7 +1122,15 @@ function MembersPanel({session,showToast}){
     const matchSearch=m.name.toLowerCase().includes(search.toLowerCase())||(m.phone||"").includes(search)
     const matchStatus=!filterStatus||m.status===filterStatus
     const matchCell=!filterCell||(filterCell==="sem_celula"?!m.cell_id:m.cell_id===filterCell)
-    return matchSearch&&matchStatus&&matchCell
+    const matchAge=!filterAge||(()=>{
+      const a=m.age;if(!a)return false
+      if(filterAge==="crianca")return a<=10
+      if(filterAge==="adolescente")return a>=11&&a<=15
+      if(filterAge==="jovem")return a>=16&&a<=22
+      if(filterAge==="adulto")return a>=23
+      return true
+    })()
+    return matchSearch&&matchStatus&&matchCell&&matchAge
   })
 
   const cOpts=[{value:"",label:"— Sem célula —"},...cells.map(c=>({value:c.id,label:c.name}))]
@@ -1146,6 +1163,13 @@ function MembersPanel({session,showToast}){
           {cells.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           <option value="sem_celula">Sem célula</option>
         </select>}
+        <select value={filterAge} onChange={e=>setFilterAge(e.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,outline:"none",background:"#fff",color:filterAge?"#8b5cf6":"#64748b",cursor:"pointer"}}>
+          <option value="">Todas as idades</option>
+          <option value="crianca">🧒 Criança (até 10)</option>
+          <option value="adolescente">🧑 Adolescente (11-15)</option>
+          <option value="jovem">👦 Jovem (16-22)</option>
+          <option value="adulto">👤 Adulto (23+)</option>
+        </select>
       </div>
 
       {loading&&<Loader/>}
@@ -1161,7 +1185,10 @@ function MembersPanel({session,showToast}){
               <Avatar name={m.name} photo={m.photo_url} size={38} color={isMember?C.primary:C.gold}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:14,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
-                <div style={{fontSize:11,color:"#94a3b8"}}>{cell?.name||"Sem célula"}{m.age?` • ${m.age} anos`:""}</div>
+                <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>{cell?.name||"Sem célula"}{m.age?` • ${m.age} anos`:""}</span>
+                {m.age&&getAgeGroup(m.age)&&<span style={{fontSize:10,fontWeight:700,color:getAgeGroup(m.age).color,background:getAgeGroup(m.age).color+"15",borderRadius:6,padding:"1px 6px"}}>{getAgeGroup(m.age).label}</span>}
+              </div>
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                 {m.phone?(
@@ -1269,14 +1296,15 @@ function BirthdayMessageModal({member,cellName,senderName,senderRole,onClose}){
   const firstName=member.name.split(" ")[0]
 
   const roleLabel={admin:"Gestor",supervisor:"Supervisor",leader:"Líder",secretary:"Secretário"}[senderRole]||"Líder"
-  const signature=`\n\n— ${senderName}\n${roleLabel} | ${cellName}`
+  const celula=`Célula ${cellName}`
+  const signature=`\n\n— ${senderName}\n${roleLabel} | ${celula}`
 
   const messages=[
-    {verse:"Salmos 91:16",text:`Olá ${firstName}! 🎂🎉\n\nHoje é um dia muito especial — seu aniversário! Em nome da ${cellName}, quero te desear um ano repleto das bênçãos de Deus.\n\n*"De longura de dias o saciarei e lhe mostrarei a minha salvação."* — Salmos 91:16\n\nQue Deus te abençoe grandemente!${signature}`},
-    {verse:"Jeremias 29:11",text:`Feliz aniversário, ${firstName}! 🎉🙏\n\nNeste dia tão especial, toda a equipe da ${cellName} celebra com você!\n\n*"Porque sou eu que conheço os planos que tenho para vocês, diz o Senhor, planos de fazê-los prosperar e não de causar dano, planos de dar a vocês esperança e um futuro."* — Jeremias 29:11\n\nQue seu novo ano de vida seja cheio do propósito de Deus!${signature}`},
-    {verse:"Números 6:24-26",text:`${firstName}, feliz aniversário! 🎂❤️\n\nA ${cellName} te parabeniza neste dia especial e ora por você!\n\n*"O Senhor te abençoe e te guarde; o Senhor faça resplandecer o Seu rosto sobre ti e tenha misericórdia de ti; o Senhor volte o Seu rosto para ti e te dê a paz."* — Números 6:24-26\n\nPaz e alegria no seu coração!${signature}`},
-    {verse:"Filipenses 4:7",text:`Parabéns, ${firstName}! 🎉🌟\n\nQue alegria celebrar mais um ano da sua vida! A equipe da ${cellName} está com você!\n\n*"E a paz de Deus, que excede todo o entendimento, guardará os vossos corações e os vossos pensamentos em Cristo Jesus."* — Filipenses 4:7\n\nQue a paz de Deus transborde na sua vida!${signature}`},
-    {verse:"Deuteronômio 33:25",text:`${firstName}, muitos parabéns! 🎂🔥\n\nDeus tem um plano lindo para a sua vida e estamos muito felizes de caminhar contigo na ${cellName}!\n\n*"Como são os teus dias, assim será a tua força."* — Deuteronômio 33:25\n\nQue Deus renove suas forças a cada dia deste novo ano!${signature}`},
+    {verse:"Salmos 91:16",text:`Olá ${firstName}! 🎂🎉\n\nHoje é um dia muito especial — seu aniversário! Em nome da ${celula}, queremos te desejar um ano repleto das bênçãos de Deus.\n\n*"De longura de dias o saciarei e lhe mostrarei a minha salvação."* — Salmos 91:16\n\nQue Deus te abençoe grandemente!${signature}`},
+    {verse:"Jeremias 29:11",text:`Feliz aniversário, ${firstName}! 🎉🙏\n\nNeste dia tão especial, toda a equipe da ${celula} celebra com você!\n\n*"Porque sou eu que conheço os planos que tenho para vocês, diz o Senhor, planos de fazê-los prosperar e não de causar dano, planos de dar a vocês esperança e um futuro."* — Jeremias 29:11\n\nQue seu novo ano de vida seja cheio do propósito de Deus!${signature}`},
+    {verse:"Números 6:24-26",text:`${firstName}, feliz aniversário! 🎂❤️\n\nA ${celula} te parabeniza neste dia especial e ora por você!\n\n*"O Senhor te abençoe e te guarde; o Senhor faça resplandecer o Seu rosto sobre ti e tenha misericórdia de ti; o Senhor volte o Seu rosto para ti e te dê a paz."* — Números 6:24-26\n\nPaz e alegria no seu coração!${signature}`},
+    {verse:"Filipenses 4:7",text:`Parabéns, ${firstName}! 🎉🌟\n\nQue alegria celebrar mais um ano da sua vida! A equipe da ${celula} está com você!\n\n*"E a paz de Deus, que excede todo o entendimento, guardará os vossos corações e os vossos pensamentos em Cristo Jesus."* — Filipenses 4:7\n\nQue a paz de Deus transborde na sua vida!${signature}`},
+    {verse:"Deuteronômio 33:25",text:`${firstName}, muitos parabéns! 🎂🔥\n\nDeus tem um plano lindo para a sua vida e estamos muito felizes de caminhar contigo na ${celula}!\n\n*"Como são os teus dias, assim será a tua força."* — Deuteronômio 33:25\n\nQue Deus renove suas forças a cada dia deste novo ano!${signature}`},
   ]
 
   const wppLink=member.phone?`https://wa.me/55${member.phone.replace(/\D/g,"")}?text=${encodeURIComponent(messages[selected].text)}`:null
@@ -1833,7 +1861,7 @@ function StudiesPanel({session,showToast}){
   const[modal,setModal]=useState(false)
   const[editing,setEditing]=useState(null)
   const[deleteId,setDeleteId]=useState(null)
-  const emptyForm={title:"",link:"",cell_id:"",study_date:"",description:""}
+  const emptyForm={title:"",link:"",link_kids:"",cell_id:"",study_date:"",description:""}
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
   const isAdmin=session?.role==="admin"||session?.role==="supervisor"
@@ -1842,7 +1870,7 @@ function StudiesPanel({session,showToast}){
 
   async function save(){
     if(!form.title.trim()){showToast("Título obrigatório","error");return}
-    const payload={title:form.title.trim(),link:form.link,cell_id:form.cell_id||null,study_date:form.study_date||null,description:form.description,created_by:session.id}
+    const payload={title:form.title.trim(),link:form.link,link_kids:form.link_kids||null,cell_id:form.cell_id||null,study_date:form.study_date||null,description:form.description,created_by:session.id}
     if(editing){
       await supabase.from("studies").update(payload).eq("id",editing)
       showToast("Estudo atualizado!")
@@ -1859,7 +1887,7 @@ function StudiesPanel({session,showToast}){
   }
 
   function openEdit(s){
-    setForm({title:s.title,link:s.link||"",cell_id:s.cell_id||"",study_date:s.study_date||"",description:s.description||""})
+    setForm({title:s.title,link:s.link||"",link_kids:s.link_kids||"",cell_id:s.cell_id||"",study_date:s.study_date||"",description:s.description||""})
     setEditing(s.id);setModal(true)
   }
 
@@ -1895,11 +1923,18 @@ function StudiesPanel({session,showToast}){
                 {isAdmin&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger}}><Icon name="trash" size={14}/></button>}
               </div>
             </div>
-            {s.link&&(
-              <a href={s.link} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:C.primary,borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,marginTop:6,boxShadow:`0 2px 8px ${C.primary}40`}}>
-                <Icon name="link" size={14}/>Acessar Estudo
-              </a>
-            )}
+            <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+              {s.link&&(
+                <a href={s.link} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:C.primary,borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:`0 2px 8px ${C.primary}40`}}>
+                  <Icon name="link" size={14}/>Acessar Estudo
+                </a>
+              )}
+              {s.link_kids&&(
+                <a href={s.link_kids} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f59e0b",borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:"0 2px 8px rgba(245,158,11,0.4)"}}>
+                  <Icon name="star" size={14}/>👧 Estudo Kids
+                </a>
+              )}
+            </div>
           </Card>
         )
       })}
@@ -1907,6 +1942,7 @@ function StudiesPanel({session,showToast}){
       <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Editar Estudo":"Novo Estudo"}>
         <Inp label="Tema do Estudo" value={form.title} onChange={f("title")} required placeholder="Ex: Jesus, o Bom Pastor"/>
         <Inp label="Link do Material" value={form.link} onChange={f("link")} placeholder="https://drive.google.com/..."/>
+        <Inp label="Link Kids 👧" value={form.link_kids} onChange={f("link_kids")} placeholder="https://drive.google.com/... (versão para crianças)"/>
         <Inp label="Data (opcional)" type="date" value={form.study_date} onChange={f("study_date")}/>
         <Sel label="Célula" value={form.cell_id} onChange={f("cell_id")} options={[{value:"",label:"📢 Todas as células"},...myCells.map(c=>({value:c.id,label:c.name}))]}/>
         <Textarea label="Descrição (opcional)" value={form.description} onChange={f("description")} placeholder="Breve descrição do estudo..." rows={3}/>
@@ -1938,6 +1974,13 @@ function ReportsPanel({session}){
   const cellData=cells.map(c=>({name:c.name,type:c.cell_type||"Adultos",count:members.filter(m=>m.cell_id===c.id&&m.status==="Membro").length,visitors:members.filter(m=>m.cell_id===c.id&&m.status==="Visitante").length,goal:c.growth_goal||0,active:c.cell_status!=="Inativa"})).sort((a,b)=>b.count-a.count)
   const genderData=activeMembers.reduce((a,m)=>{a[m.gender||"N/I"]=(a[m.gender||"N/I"]||0)+1;return a},{})
   const churchMembers=activeMembers.filter(m=>m.church_member===true).length
+  const ageGroups=[
+    {label:"Crianças",icon:"🧒",color:"#06b6d4",count:members.filter(m=>m.age&&m.age<=10).length},
+    {label:"Adolescentes",icon:"🧑",color:"#8b5cf6",count:members.filter(m=>m.age&&m.age>=11&&m.age<=15).length},
+    {label:"Jovens",icon:"👦",color:"#10b981",count:members.filter(m=>m.age&&m.age>=16&&m.age<=22).length},
+    {label:"Adultos",icon:"👤",color:C.primary,count:members.filter(m=>m.age&&m.age>=23).length},
+    {label:"Sem idade",icon:"❓",color:"#94a3b8",count:members.filter(m=>!m.age).length},
+  ].filter(g=>g.count>0)
   const notChurchMembers=activeMembers.filter(m=>m.church_member!==true).length
   const cellChurchStats=cells.map(c=>{
     const mc=members.filter(m=>m.cell_id===c.id&&m.status==="Membro")
@@ -1991,6 +2034,34 @@ function ReportsPanel({session}){
         {Object.entries(genderData).map(([k,v])=>(<div key={k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:"#334155",minWidth:80}}>{k}</span><Bar value={v} max={activeMembers.length} color={C.primary}/><span style={{fontSize:12,fontWeight:700,color:C.primary,minWidth:24,textAlign:"right"}}>{v}</span></div>))}
       </Card>
 
+      <Card style={{marginBottom:14}}>
+        <h3 style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:14}}>👶 Faixas Etárias</h3>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          {ageGroups.map(g=>(
+            <div key={g.label} style={{background:g.color+"10",borderRadius:12,padding:"10px 12px",border:`1px solid ${g.color}20`}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <span style={{fontSize:16}}>{g.icon}</span>
+                <span style={{fontSize:11,fontWeight:700,color:g.color,textTransform:"uppercase",letterSpacing:"0.04em"}}>{g.label}</span>
+              </div>
+              <div style={{fontSize:24,fontWeight:900,color:g.color,lineHeight:1}}>{g.count}</div>
+              <div style={{fontSize:11,color:"#64748b",marginTop:3}}>{members.length>0?Math.round(g.count/members.length*100):0}% do total</div>
+            </div>
+          ))}
+        </div>
+        <div style={{height:12,background:"#f1f5f9",borderRadius:6,overflow:"hidden",display:"flex"}}>
+          {ageGroups.filter(g=>g.label!=="Sem idade").map(g=>(
+            <div key={g.label} style={{height:"100%",width:`${members.length>0?Math.round(g.count/members.length*100):0}%`,background:g.color,transition:"width 0.6s"}} title={`${g.label}: ${g.count}`}/>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8}}>
+          {ageGroups.filter(g=>g.label!=="Sem idade").map(g=>(
+            <div key={g.label} style={{display:"flex",alignItems:"center",gap:4}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:g.color}}/>
+              <span style={{fontSize:10,color:"#64748b",fontWeight:600}}>{g.label}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
       <Card style={{marginBottom:14,border:"1px solid #bfdbfe",background:"#eff6ff"}}>
         <h3 style={{fontSize:14,fontWeight:800,color:C.primary,marginBottom:14}}>⛪ Membros da Promessa Lago dos Peixes</h3>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
