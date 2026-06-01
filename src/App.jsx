@@ -637,6 +637,14 @@ function AdminOverview({session,showToast,setTab}){
     const b=new Date(m.birth_date)
     const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate())
     return t>=start&&t<=end
+  }).map(m=>{
+    const cell=cells.find(c=>c.id===m.cell_id)
+    const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
+    const weekDays=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
+    const dayName=weekDays[bDate.getDay()]
+    const dayNum=String(bDate.getDate()).padStart(2,"0")
+    const monthNum=String(bDate.getMonth()+1).padStart(2,"0")
+    return{...m,cellName:cell?.name||"Sem célula",dayName,dayNum,monthNum}
   })
   const nextMeetings=activeCells.filter(c=>c.next_meeting_date).sort((a,b)=>a.next_meeting_date.localeCompare(b.next_meeting_date)).slice(0,4)
   const monthNames=["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
@@ -645,16 +653,28 @@ function AdminOverview({session,showToast,setTab}){
     <div style={{animation:"fadeIn 0.2s ease"}}>
 
       {/* ALERTS */}
-      {weekBirthdays.length>0&&(
-        <div style={{background:`linear-gradient(135deg,${C.gold},#c97b10)`,borderRadius:16,padding:"14px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 16px rgba(232,146,26,0.35)"}}>
-          <div style={{fontSize:32}}>🎂</div>
-          <div style={{flex:1}}>
-            <div style={{color:"#fff",fontSize:14,fontWeight:800,marginBottom:2}}>Aniversário esta semana!</div>
-            <div style={{color:"rgba(255,255,255,0.9)",fontSize:13}}>{weekBirthdays.map(m=>m.name.split(" ")[0]).join(", ")}</div>
+      {weekBirthdays.length>0&&(()=>{
+        const[bdModal,setBdModal]=useState(null)
+        return(
+          <div style={{background:`linear-gradient(135deg,${C.gold},#c97b10)`,borderRadius:16,padding:"14px 18px",marginBottom:16,boxShadow:"0 4px 16px rgba(232,146,26,0.35)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:weekBirthdays.length>0?8:0}}>
+              <div style={{fontSize:28}}>🎂</div>
+              <span style={{color:"#fff",fontSize:13,fontWeight:800,flex:1}}>Aniversário esta semana!</span>
+            </div>
+            {weekBirthdays.map(m=>(
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
+                <Avatar name={m.name} photo={m.photo_url} size={34} color="rgba(255,255,255,0.3)"/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#fff",fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                  <div style={{color:"rgba(255,255,255,0.8)",fontSize:11}}>{m.cellName} • {m.dayName}, {m.dayNum}/{m.monthNum}</div>
+                </div>
+                <button onClick={()=>setBdModal(m)} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:10,padding:"6px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,flexShrink:0}}><Icon name="whatsapp" size={13}/>Parabéns</button>
+              </div>
+            ))}
+            {bdModal&&<BirthdayMessageModal member={bdModal} cellName={bdModal.cellName} senderName={session.name} senderRole={session.role} onClose={()=>setBdModal(null)}/>}
           </div>
-          {weekBirthdays[0]?.phone&&<a href={whatsappLink(weekBirthdays[0].phone)} target="_blank" rel="noopener noreferrer" style={{background:"rgba(255,255,255,0.2)",borderRadius:10,padding:"7px 12px",color:"#fff",textDecoration:"none",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:5,flexShrink:0}}><Icon name="whatsapp" size={14}/>Parabéns</a>}
-        </div>
-      )}
+        )
+      })()}
       {(pending+pendingPrayers)>0&&(
         <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:14,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
           <Icon name="bell" size={18} color={C.danger}/>
@@ -1216,6 +1236,50 @@ function MemberCard({member,cells,onClose}){
         </div>
       </div>
     </div>
+  )
+}
+
+
+// ─── BIRTHDAY MESSAGE MODAL ───────────────────────────────────────────────────
+function BirthdayMessageModal({member,cellName,senderName,senderRole,onClose}){
+  const[selected,setSelected]=useState(0)
+  const firstName=member.name.split(" ")[0]
+
+  const roleLabel={admin:"Gestor",supervisor:"Supervisor",leader:"Líder",secretary:"Secretário"}[senderRole]||"Líder"
+  const signature=`\n\n— ${senderName}\n${roleLabel} | ${cellName}`
+
+  const messages=[
+    {verse:"Salmos 91:16",text:`Olá ${firstName}! 🎂🎉\n\nHoje é um dia muito especial — seu aniversário! Em nome da ${cellName}, quero te desear um ano repleto das bênçãos de Deus.\n\n*"De longura de dias o saciarei e lhe mostrarei a minha salvação."* — Salmos 91:16\n\nQue Deus te abençoe grandemente!${signature}`},
+    {verse:"Jeremias 29:11",text:`Feliz aniversário, ${firstName}! 🎉🙏\n\nNeste dia tão especial, toda a equipe da ${cellName} celebra com você!\n\n*"Porque sou eu que conheço os planos que tenho para vocês, diz o Senhor, planos de fazê-los prosperar e não de causar dano, planos de dar a vocês esperança e um futuro."* — Jeremias 29:11\n\nQue seu novo ano de vida seja cheio do propósito de Deus!${signature}`},
+    {verse:"Números 6:24-26",text:`${firstName}, feliz aniversário! 🎂❤️\n\nA ${cellName} te parabeniza neste dia especial e ora por você!\n\n*"O Senhor te abençoe e te guarde; o Senhor faça resplandecer o Seu rosto sobre ti e tenha misericórdia de ti; o Senhor volte o Seu rosto para ti e te dê a paz."* — Números 6:24-26\n\nPaz e alegria no seu coração!${signature}`},
+    {verse:"Filipenses 4:7",text:`Parabéns, ${firstName}! 🎉🌟\n\nQue alegria celebrar mais um ano da sua vida! A equipe da ${cellName} está com você!\n\n*"E a paz de Deus, que excede todo o entendimento, guardará os vossos corações e os vossos pensamentos em Cristo Jesus."* — Filipenses 4:7\n\nQue a paz de Deus transborde na sua vida!${signature}`},
+    {verse:"Deuteronômio 33:25",text:`${firstName}, muitos parabéns! 🎂🔥\n\nDeus tem um plano lindo para a sua vida e estamos muito felizes de caminhar contigo na ${cellName}!\n\n*"Como são os teus dias, assim será a tua força."* — Deuteronômio 33:25\n\nQue Deus renove suas forças a cada dia deste novo ano!${signature}`},
+  ]
+
+  const wppLink=member.phone?`https://wa.me/55${member.phone.replace(/\D/g,"")}?text=${encodeURIComponent(messages[selected].text)}`:null
+
+  return(
+    <Modal open title={`🎂 Mensagem para ${firstName}`} onClose={onClose}>
+      <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>Escolha uma mensagem para enviar pelo WhatsApp:</p>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+        {messages.map((m,i)=>(
+          <button key={i} onClick={()=>setSelected(i)} style={{textAlign:"left",background:selected===i?C.primary+"10":"#f8fafc",border:`1.5px solid ${selected===i?C.primary:"#e2e8f0"}`,borderRadius:12,padding:"10px 14px",cursor:"pointer",transition:"all 0.15s"}}>
+            <div style={{fontSize:12,fontWeight:700,color:selected===i?C.primary:"#334155",marginBottom:3}}>Mensagem {i+1} — {m.verse}</div>
+            <div style={{fontSize:11,color:"#64748b",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{m.text.split("\n")[0]}</div>
+          </button>
+        ))}
+      </div>
+      <div style={{background:"#f8fafc",borderRadius:12,padding:"12px 14px",marginBottom:14,border:"1px solid #e2e8f0",maxHeight:160,overflowY:"auto"}}>
+        <p style={{fontSize:12,color:"#334155",margin:0,lineHeight:1.7,whiteSpace:"pre-line"}}>{messages[selected].text}</p>
+      </div>
+      {wppLink?(
+        <a href={wppLink} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#25d366",borderRadius:12,padding:"12px",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:800,boxShadow:"0 2px 8px rgba(37,211,102,0.3)"}}>
+          <Icon name="whatsapp" size={18}/>Enviar pelo WhatsApp
+        </a>
+      ):(
+        <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",textAlign:"center",fontSize:13,color:C.danger,fontWeight:600}}>Membro sem telefone cadastrado</div>
+      )}
+    </Modal>
   )
 }
 
@@ -2189,12 +2253,33 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
       </header>
       {sub==="home"?(
         <div style={{flex:1,padding:"16px 16px 80px"}}>
-          {weekBirthdays.length>0&&(
-            <div style={{background:`linear-gradient(135deg,${C.gold},#d4820f)`,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 16px rgba(232,146,26,0.3)"}}>
-              <div style={{fontSize:28}}>🎂</div>
-              <div><div style={{color:"#fff",fontSize:13,fontWeight:800,marginBottom:2}}>Aniversário esta semana!</div><div style={{color:"rgba(255,255,255,0.85)",fontSize:12}}>{weekBirthdays.map(m=>m.name.split(" ")[0]).join(", ")}</div></div>
-            </div>
-          )}
+          {weekBirthdays.length>0&&(()=>{
+            const[bdModal,setBdModal]=useState(null)
+            const bDays=weekBirthdays.map(m=>{
+              const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
+              const weekDays=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
+              return{...m,dayName:weekDays[bDate.getDay()],dayNum:String(bDate.getDate()).padStart(2,"0"),monthNum:String(bDate.getMonth()+1).padStart(2,"0"),cellName:cell?.name||""}
+            })
+            return(
+              <div style={{background:`linear-gradient(135deg,${C.gold},#d4820f)`,borderRadius:16,padding:"14px 16px",marginBottom:16,boxShadow:"0 4px 16px rgba(232,146,26,0.3)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <div style={{fontSize:24}}>🎂</div>
+                  <span style={{color:"#fff",fontSize:13,fontWeight:800}}>Aniversário esta semana!</span>
+                </div>
+                {bDays.map(m=>(
+                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
+                    <Avatar name={m.name} photo={m.photo_url} size={30} color="rgba(255,255,255,0.3)"/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#fff",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                      <div style={{color:"rgba(255,255,255,0.8)",fontSize:11}}>{m.dayName}, {m.dayNum}/{m.monthNum}</div>
+                    </div>
+                    <button onClick={()=>setBdModal(m)} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,padding:"5px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}><Icon name="whatsapp" size={12}/>Parabéns</button>
+                  </div>
+                ))}
+                {bdModal&&<BirthdayMessageModal member={bdModal} cellName={cell?.name||""} senderName={session.name} senderRole={session.role} onClose={()=>setBdModal(null)}/>}
+              </div>
+            )
+          })()}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
             <Stat label="Membros" value={cellMembers.length} color={C.primary} icon="users" sub={cellVisitors.length>0?`+ ${cellVisitors.length} visitantes`:""}/>
             <Stat label="Encontros" value={cellMeetings.length} color={C.gold} icon="meeting"/>
