@@ -1934,31 +1934,55 @@ function EventsPanel({session,showToast}){
 function SongsPanel({session,showToast}){
   const{data:songs,loading,reload}=useTable("songs")
   const[modal,setModal]=useState(false)
+  const[editing,setEditing]=useState(null)
   const[deleteId,setDeleteId]=useState(null)
-  const[search,setSearch]=useState("")
-  const[form,setForm]=useState({title:"",artist:"",link:"",lyrics:""})
   const[lyricsModal,setLyricsModal]=useState(null)
+  const[search,setSearch]=useState("")
+  const[filterTab,setFilterTab]=useState("approved")
+  const emptyForm={title:"",artist:"",link:"",lyrics:""}
+  const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
-  const canDelete=session?.role==="admin"||session?.role==="supervisor"
+
+  const isAdmin=session?.role==="admin"||session?.role==="supervisor"
+  const isLeader=session?.role==="leader"
+  const canDelete=isAdmin||isLeader
+  const canApprove=session?.role==="leader"||session?.role==="admin"||session?.role==="supervisor"
+
+  const approved=songs.filter(s=>(s.status||"approved")==="approved")
+  const pending=songs.filter(s=>s.status==="pending")
+
+  const filtered=(filterTab==="approved"?approved:pending).filter(s=>
+    s.title.toLowerCase().includes(search.toLowerCase())||
+    (s.artist||"").toLowerCase().includes(search.toLowerCase())
+  )
+
+  function openEdit(s){
+    setForm({title:s.title,artist:s.artist||"",link:s.link||"",lyrics:s.lyrics||""})
+    setEditing(s.id);setModal(true)
+  }
 
   async function save(){
     if(!form.title.trim()){showToast("Nome da música obrigatório","error");return}
-    // Check duplicate (case-insensitive)
-    const exists=songs.find(s=>s.title.trim().toLowerCase()===form.title.trim().toLowerCase())
-    if(exists){
-      showToast(`"${exists.title}" já está cadastrada!`,"error")
-      return
+    if(editing){
+      await supabase.from("songs").update({title:form.title.trim(),artist:form.artist.trim(),link:form.link.trim(),lyrics:form.lyrics.trim()}).eq("id",editing)
+      showToast("Música atualizada! 🎵")
+    }else{
+      const exists=approved.find(s=>s.title.trim().toLowerCase()===form.title.trim().toLowerCase())
+      if(exists){showToast(`"${exists.title}" já está cadastrada!`,"error");return}
+      await supabase.from("songs").insert({title:form.title.trim(),artist:form.artist.trim(),link:form.link.trim(),lyrics:form.lyrics.trim(),status:"approved",created_by:session.id,created_by_name:session.name})
+      showToast("Música cadastrada! 🎵")
     }
-    await supabase.from("songs").insert({
-      title:form.title.trim(),
-      artist:form.artist.trim(),
-      link:form.link.trim(),
-      lyrics:form.lyrics.trim(),
-      created_by:session.id,
-      created_by_name:session.name
-    })
-    showToast("Música cadastrada! 🎵")
-    setModal(false);setForm({title:"",artist:"",link:""})
+    setModal(false);setEditing(null);setForm(emptyForm)
+  }
+
+  async function approve(id){
+    await supabase.from("songs").update({status:"approved"}).eq("id",id)
+    showToast("Música aprovada e adicionada ao repertório! ✓")
+  }
+
+  async function reject(id){
+    await supabase.from("songs").delete().eq("id",id)
+    showToast("Sugestão rejeitada")
   }
 
   async function del(){
@@ -1966,19 +1990,24 @@ function SongsPanel({session,showToast}){
     showToast("Música removida");setDeleteId(null)
   }
 
-  const filtered=songs.filter(s=>
-    s.title.toLowerCase().includes(search.toLowerCase())||
-    (s.artist||"").toLowerCase().includes(search.toLowerCase())
-  )
-
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
         <div>
           <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:"0 0 2px"}}>Repertório 🎵</h2>
-          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{songs.length} música(s) cadastrada(s)</p>
+          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{approved.length} música(s) aprovada(s){pending.length>0?` • ${pending.length} sugestão(ões) pendente(s)`:""}</p>
         </div>
-        <Btn icon="plus" size="sm" onClick={()=>setModal(true)}>Nova</Btn>
+        <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Nova</Btn>
+      </div>
+
+      <div style={{display:"flex",gap:4,marginBottom:12,background:"#f1f5f9",borderRadius:12,padding:4}}>
+        <button onClick={()=>setFilterTab("approved")} style={{flex:1,padding:"8px",borderRadius:10,fontSize:13,fontWeight:700,border:"none",cursor:"pointer",background:filterTab==="approved"?"#fff":"transparent",color:filterTab==="approved"?"#0f172a":"#64748b",boxShadow:filterTab==="approved"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
+          ✓ Aprovadas ({approved.length})
+        </button>
+        <button onClick={()=>setFilterTab("pending")} style={{flex:1,padding:"8px",borderRadius:10,fontSize:13,fontWeight:700,border:"none",cursor:"pointer",background:filterTab==="pending"?"#fff":"transparent",color:filterTab==="pending"?"#0f172a":"#64748b",boxShadow:filterTab==="pending"?"0 1px 4px rgba(0,0,0,0.08)":"none",position:"relative"}}>
+          ⏳ Sugestões ({pending.length})
+          {pending.length>0&&<span style={{position:"absolute",top:4,right:8,background:C.danger,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{pending.length}</span>}
+        </button>
       </div>
 
       <div style={{position:"relative",marginBottom:14}}>
@@ -1990,52 +2019,56 @@ function SongsPanel({session,showToast}){
       {!loading&&filtered.length===0&&(
         <div style={{textAlign:"center",padding:"40px 20px"}}>
           <div style={{fontSize:48,marginBottom:12}}>🎵</div>
-          <p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>{search?"Nenhuma música encontrada":"Nenhuma música cadastrada ainda"}</p>
-          {!search&&<Btn onClick={()=>setModal(true)} icon="plus" style={{marginTop:8}}>Cadastrar primeira música</Btn>}
+          <p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>{filterTab==="pending"?"Nenhuma sugestão pendente":"Nenhuma música cadastrada ainda"}</p>
         </div>
       )}
 
       <div style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",overflow:"hidden",boxShadow:"0 1px 6px rgba(0,0,0,0.05)"}}>
         {filtered.map((s,i)=>(
-          <div key={s.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderTop:i>0?"1px solid #f1f5f9":"none"}}>
-            <div style={{width:40,height:40,borderRadius:12,background:C.primary+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:C.primary}}>
-              <Icon name="music" size={18}/>
+          <div key={s.id} style={{padding:"12px 14px",borderTop:i>0?"1px solid #f1f5f9":"none"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:40,height:40,borderRadius:12,background:C.primary+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:C.primary}}>
+                <Icon name="music" size={18}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
+                <div style={{fontSize:11,color:"#94a3b8"}}>{s.artist||"—"} • por {s.created_by_name?.split(" ")[0]||"—"}</div>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {s.lyrics&&<button onClick={()=>setLyricsModal(s)} style={{background:C.gold+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.gold,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}><Icon name="music" size={13}/>Letra</button>}
+                {s.link&&<a href={s.link} target="_blank" rel="noopener noreferrer" style={{background:C.primary+"15",borderRadius:8,padding:7,display:"flex",color:C.primary,textDecoration:"none"}}><Icon name="link" size={14}/></a>}
+                {filterTab==="approved"&&<button onClick={()=>openEdit(s)} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.primary,display:"flex"}}><Icon name="edit" size={14}/></button>}
+                {canDelete&&filterTab==="approved"&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger,display:"flex"}}><Icon name="trash" size={14}/></button>}
+              </div>
             </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
-              <div style={{fontSize:11,color:"#94a3b8"}}>{s.artist||"—"} • por {s.created_by_name?.split(" ")[0]}</div>
-            </div>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              {s.lyrics&&(
-                <button onClick={()=>setLyricsModal(s)} style={{background:C.gold+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.gold,display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:700}}>
-                  <Icon name="music" size={13}/>Letra
-                </button>
-              )}
-              {s.link&&(
-                <a href={s.link} target="_blank" rel="noopener noreferrer" style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,display:"flex",color:C.primary,textDecoration:"none"}}>
-                  <Icon name="link" size={14}/>
-                </a>
-              )}
-              {canDelete&&(
-                <button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger,display:"flex"}}>
-                  <Icon name="trash" size={14}/>
-                </button>
-              )}
-            </div>
+            {filterTab==="pending"&&canApprove&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
+                <Btn variant="success" size="sm" onClick={()=>approve(s.id)}>✓ Aprovar</Btn>
+                <Btn variant="danger" size="sm" onClick={()=>reject(s.id)}>✗ Rejeitar</Btn>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      <Modal open={modal} onClose={()=>{setModal(false);setForm({title:"",artist:"",link:""})}} title="Nova Música">
+      <Modal open={modal} onClose={()=>{setModal(false);setEditing(null);setForm(emptyForm)}} title={editing?"Editar Música":"Nova Música"}>
         <Inp label="Nome da Música *" value={form.title} onChange={f("title")} required placeholder="Ex: Não Desista de Você"/>
         <Inp label="Artista / Ministério" value={form.artist} onChange={f("artist")} placeholder="Ex: Ministério Zoe"/>
         <Inp label="Link (YouTube, Spotify...)" value={form.link} onChange={f("link")} placeholder="https://..."/>
-        <Textarea label="Letra da Música (opcional)" value={form.lyrics} onChange={f("lyrics")} placeholder="Cole aqui a letra completa da música..." rows={6}/>
-        <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#92400e",fontWeight:500}}>
-          ⚠️ O sistema não permite músicas duplicadas. Se a música já estiver cadastrada, não será possível adicionar novamente.
-        </div>
-        <Btn full onClick={save} icon="music">Cadastrar Música</Btn>
+        <Textarea label="Letra da Música (opcional)" value={form.lyrics} onChange={f("lyrics")} placeholder="Cole aqui a letra completa..." rows={6}/>
+        {!editing&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#92400e",fontWeight:500}}>⚠️ O sistema não permite músicas duplicadas.</div>}
+        <Btn full onClick={save} icon="music">{editing?"Salvar Alterações":"Cadastrar Música"}</Btn>
       </Modal>
+
+      {lyricsModal&&(
+        <Modal open title={`🎵 ${lyricsModal.title}`} onClose={()=>setLyricsModal(null)}>
+          {lyricsModal.artist&&<p style={{fontSize:13,color:"#94a3b8",fontWeight:600,marginBottom:16}}>{lyricsModal.artist}</p>}
+          <div style={{background:"#f8fafc",borderRadius:14,padding:"16px 18px",border:"1px solid #e8edf2",maxHeight:400,overflowY:"auto"}}>
+            <pre style={{fontSize:14,color:"#334155",lineHeight:1.9,fontFamily:"'Outfit',sans-serif",whiteSpace:"pre-wrap",margin:0}}>{lyricsModal.lyrics}</pre>
+          </div>
+          {lyricsModal.link&&<a href={lyricsModal.link} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.primary,borderRadius:12,padding:"11px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,marginTop:14}}><Icon name="link" size={15}/>Ouvir música</a>}
+        </Modal>
+      )}
 
       {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}>
         <p style={{color:"#64748b",marginBottom:16}}>Remover esta música do repertório?</p>
@@ -2044,22 +2077,10 @@ function SongsPanel({session,showToast}){
           <Btn variant="danger" onClick={del}>Excluir</Btn>
         </div>
       </Modal>}
-      {lyricsModal&&(
-        <Modal open title={`🎵 ${lyricsModal.title}`} onClose={()=>setLyricsModal(null)}>
-          {lyricsModal.artist&&<p style={{fontSize:13,color:"#94a3b8",fontWeight:600,marginBottom:16}}>{lyricsModal.artist}</p>}
-          <div style={{background:"#f8fafc",borderRadius:14,padding:"16px 18px",border:"1px solid #e8edf2",maxHeight:400,overflowY:"auto"}}>
-            <pre style={{fontSize:14,color:"#334155",lineHeight:1.9,fontFamily:"'Outfit',sans-serif",whiteSpace:"pre-wrap",margin:0}}>{lyricsModal.lyrics}</pre>
-          </div>
-          {lyricsModal.link&&(
-            <a href={lyricsModal.link} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.primary,borderRadius:12,padding:"11px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,marginTop:14}}>
-              <Icon name="link" size={15}/>Ouvir música
-            </a>
-          )}
-        </Modal>
-      )}
     </div>
   )
 }
+
 
 // ─── STUDIES PANEL ────────────────────────────────────────────────────────────
 function StudiesPanel({session,showToast}){
@@ -2760,6 +2781,10 @@ function MemberPortal({session,logout,showToast}){
   const myAtt=Object.values(myAttMap).sort((a,b)=>b.date.localeCompare(a.date))
   const pct=myAtt.length?Math.round(myAtt.filter(a=>a.status==="Presente").length/myAtt.length*100):0
   const myPrayers=prayers.filter(p=>p.member_id===session.member_id)
+  const{data:songs}=useTable("songs")
+  const[lyricsModal,setLyricsModal]=useState(null)
+  const[suggestModal,setSuggestModal]=useState(false)
+  const[suggestForm,setSuggestForm]=useState({title:"",artist:"",lyrics:""})
 
   const{start,end}=getCurrentWeekDates()
   const weekBirthday=member?.birth_date&&(()=>{const b=new Date(member.birth_date);const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate());return t>=start&&t<=end})()
@@ -2785,8 +2810,8 @@ function MemberPortal({session,logout,showToast}){
           </div>
         </div>
         <div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.08)",borderRadius:14,padding:3}}>
-          {[["dados","Dados"],["celula","Célula"],["presenca","Presença"],["oracao","Oração"],["aniversario","🎂"]].map(([id,label])=>(
-            <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"8px 4px",borderRadius:12,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:tab===id?"#fff":"transparent",color:tab===id?C.primary:"rgba(255,255,255,0.6)",transition:"all 0.15s"}}>{label}</button>
+          {[["dados","Dados"],["celula","Célula"],["presenca","Presença"],["musicas","🎵"],["oracao","Oração"],["aniversario","🎂"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"8px 4px",borderRadius:12,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:tab===id?"#fff":"transparent",color:tab===id?C.primary:"rgba(255,255,255,0.6)",transition:"all 0.15s"}}>{label}</button>
           ))}
         </div>
       </div>
@@ -2889,6 +2914,62 @@ function MemberPortal({session,logout,showToast}){
                 </Card>
               )
             })}
+          </div>
+        )}
+
+        {tab==="musicas"&&(
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <h3 style={{fontSize:16,fontWeight:800,color:"#0f172a",margin:0}}>🎵 Repertório</h3>
+              <Btn icon="plus" size="sm" variant="gold" onClick={()=>setSuggestModal(true)}>Sugerir</Btn>
+            </div>
+            <p style={{fontSize:13,color:"#64748b",marginBottom:16}}>Músicas aprovadas para a célula</p>
+            {songs.filter(s=>(s.status||"approved")==="approved").length===0&&(
+              <div style={{textAlign:"center",padding:"40px 20px"}}>
+                <div style={{fontSize:48,marginBottom:12}}>🎵</div>
+                <p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>Nenhuma música no repertório ainda</p>
+              </div>
+            )}
+            {songs.filter(s=>(s.status||"approved")==="approved").map(s=>(
+              <Card key={s.id} style={{marginBottom:10,borderLeft:`3px solid ${C.primary}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{width:40,height:40,borderRadius:12,background:C.primary+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:C.primary}}>
+                    <Icon name="music" size={18}/>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
+                    {s.artist&&<div style={{fontSize:12,color:"#94a3b8"}}>{s.artist}</div>}
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    {s.lyrics&&<button onClick={()=>setLyricsModal(s)} style={{background:C.gold+"15",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:C.gold,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}><Icon name="music" size={13}/>Letra</button>}
+                    {s.link&&<a href={s.link} target="_blank" rel="noopener noreferrer" style={{background:C.primary+"15",borderRadius:8,padding:7,display:"flex",color:C.primary,textDecoration:"none"}}><Icon name="link" size={14}/></a>}
+                  </div>
+                </div>
+              </Card>
+            ))}
+
+            {lyricsModal&&(
+              <Modal open title={`🎵 ${lyricsModal.title}`} onClose={()=>setLyricsModal(null)}>
+                {lyricsModal.artist&&<p style={{fontSize:13,color:"#94a3b8",fontWeight:600,marginBottom:16}}>{lyricsModal.artist}</p>}
+                <div style={{background:"#f8fafc",borderRadius:14,padding:"16px 18px",border:"1px solid #e8edf2",maxHeight:400,overflowY:"auto"}}>
+                  <pre style={{fontSize:14,color:"#334155",lineHeight:1.9,fontFamily:"'Outfit',sans-serif",whiteSpace:"pre-wrap",margin:0}}>{lyricsModal.lyrics}</pre>
+                </div>
+                {lyricsModal.link&&<a href={lyricsModal.link} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.primary,borderRadius:12,padding:"11px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,marginTop:14}}><Icon name="link" size={15}/>Ouvir música</a>}
+              </Modal>
+            )}
+
+            <Modal open={suggestModal} onClose={()=>{setSuggestModal(false);setSuggestForm({title:"",artist:"",lyrics:""})}} title="Sugerir Música 🎵">
+              <p style={{fontSize:13,color:"#64748b",marginBottom:14}}>Sua sugestão será enviada para aprovação do líder.</p>
+              <Inp label="Nome da Música *" value={suggestForm.title} onChange={v=>setSuggestForm(p=>({...p,title:v}))} required placeholder="Ex: Não Desista de Você"/>
+              <Inp label="Cantor / Ministério *" value={suggestForm.artist} onChange={v=>setSuggestForm(p=>({...p,artist:v}))} required placeholder="Ex: Ministério Zoe"/>
+              <Textarea label="Letra *" value={suggestForm.lyrics} onChange={v=>setSuggestForm(p=>({...p,lyrics:v}))} placeholder="Cole a letra completa aqui..." rows={6}/>
+              <Btn full variant="gold" onClick={async()=>{
+                if(!suggestForm.title.trim()||!suggestForm.artist.trim()||!suggestForm.lyrics.trim()){showToast("Nome, cantor e letra são obrigatórios","error");return}
+                await supabase.from("songs").insert({title:suggestForm.title.trim(),artist:suggestForm.artist.trim(),lyrics:suggestForm.lyrics.trim(),link:"",status:"pending",created_by:session.id,created_by_name:session.name})
+                showToast("Sugestão enviada! O líder irá avaliar 🎵")
+                setSuggestModal(false);setSuggestForm({title:"",artist:"",lyrics:""})
+              }}>Enviar Sugestão</Btn>
+            </Modal>
           </div>
         )}
 
