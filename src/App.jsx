@@ -587,12 +587,12 @@ function AdminDashboard({session,logout,showToast}){
   const tabs=[
     {id:"dashboard",label:"Painel",icon:"gauge"},
     {id:"meetings",label:"Encontros",icon:"meeting"},
-    {id:"prayer",label:"Orações",icon:"pray"},
-    {id:"studies",label:"Estudos",icon:"star"},
     {id:"songs",label:"Músicas",icon:"music"},
-    {id:"events",label:"Eventos",icon:"event"},
+    {id:"studies",label:"Estudos",icon:"star"},
+    {id:"prayer",label:"Orações",icon:"pray"},
     {id:"cells",label:"Células",icon:"grid"},
     {id:"members",label:"Membros",icon:"users"},
+    {id:"events",label:"Eventos",icon:"event"},
     {id:"reports",label:"Relatórios",icon:"bar-chart"},
     {id:"messages",label:"Mensagens",icon:"message"},
     {id:"requests",label:"Solicits.",icon:"inbox"},
@@ -1936,7 +1936,8 @@ function SongsPanel({session,showToast}){
   const[modal,setModal]=useState(false)
   const[deleteId,setDeleteId]=useState(null)
   const[search,setSearch]=useState("")
-  const[form,setForm]=useState({title:"",artist:"",link:""})
+  const[form,setForm]=useState({title:"",artist:"",link:"",lyrics:""})
+  const[lyricsModal,setLyricsModal]=useState(null)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
   const canDelete=session?.role==="admin"||session?.role==="supervisor"
 
@@ -1952,6 +1953,7 @@ function SongsPanel({session,showToast}){
       title:form.title.trim(),
       artist:form.artist.trim(),
       link:form.link.trim(),
+      lyrics:form.lyrics.trim(),
       created_by:session.id,
       created_by_name:session.name
     })
@@ -2004,6 +2006,11 @@ function SongsPanel({session,showToast}){
               <div style={{fontSize:11,color:"#94a3b8"}}>{s.artist||"—"} • por {s.created_by_name?.split(" ")[0]}</div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              {s.lyrics&&(
+                <button onClick={()=>setLyricsModal(s)} style={{background:C.gold+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.gold,display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:700}}>
+                  <Icon name="music" size={13}/>Letra
+                </button>
+              )}
               {s.link&&(
                 <a href={s.link} target="_blank" rel="noopener noreferrer" style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,display:"flex",color:C.primary,textDecoration:"none"}}>
                   <Icon name="link" size={14}/>
@@ -2023,6 +2030,7 @@ function SongsPanel({session,showToast}){
         <Inp label="Nome da Música *" value={form.title} onChange={f("title")} required placeholder="Ex: Não Desista de Você"/>
         <Inp label="Artista / Ministério" value={form.artist} onChange={f("artist")} placeholder="Ex: Ministério Zoe"/>
         <Inp label="Link (YouTube, Spotify...)" value={form.link} onChange={f("link")} placeholder="https://..."/>
+        <Textarea label="Letra da Música (opcional)" value={form.lyrics} onChange={f("lyrics")} placeholder="Cole aqui a letra completa da música..." rows={6}/>
         <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#92400e",fontWeight:500}}>
           ⚠️ O sistema não permite músicas duplicadas. Se a música já estiver cadastrada, não será possível adicionar novamente.
         </div>
@@ -2036,6 +2044,19 @@ function SongsPanel({session,showToast}){
           <Btn variant="danger" onClick={del}>Excluir</Btn>
         </div>
       </Modal>}
+      {lyricsModal&&(
+        <Modal open title={`🎵 ${lyricsModal.title}`} onClose={()=>setLyricsModal(null)}>
+          {lyricsModal.artist&&<p style={{fontSize:13,color:"#94a3b8",fontWeight:600,marginBottom:16}}>{lyricsModal.artist}</p>}
+          <div style={{background:"#f8fafc",borderRadius:14,padding:"16px 18px",border:"1px solid #e8edf2",maxHeight:400,overflowY:"auto"}}>
+            <pre style={{fontSize:14,color:"#334155",lineHeight:1.9,fontFamily:"'Outfit',sans-serif",whiteSpace:"pre-wrap",margin:0}}>{lyricsModal.lyrics}</pre>
+          </div>
+          {lyricsModal.link&&(
+            <a href={lyricsModal.link} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.primary,borderRadius:12,padding:"11px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,marginTop:14}}>
+              <Icon name="link" size={15}/>Ouvir música
+            </a>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }
