@@ -12,7 +12,7 @@ const FREQUENCIES = ["Semanal","Quinzenal","Mensal"]
 const REACTIONS = ["🙏","❤️","🔥","✝️","😭","🙌"]
 
 // Cores da Promessa
-const C = {
+const C = { 
   primary: "#1B4F8A",
   gold: "#E8921A",
   dark: "#0f172a",
