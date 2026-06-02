@@ -136,6 +136,7 @@ const Icon=({name,size=18,color="currentColor"})=>(
     {name==="user-plus"&&<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></>}
     {name==="meeting"&&<><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 2v4M16 2v4"/><circle cx="8" cy="15" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="16" cy="15" r="1"/></>}
     {name==="church"&&<><path d="M12 2v5M9.5 4.5h5M5 10h14M5 10v10h5v-5h4v5h5V10M12 7v3"/></>}
+    {name==="music"&&<><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></>}
     {name==="bell"&&<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>}
   </svg>
 )
@@ -632,6 +633,7 @@ function AdminDashboard({session,logout,showToast}){
           {tab==="messages"&&<MessagesPanel session={session} showToast={showToast}/>}
           {tab==="requests"&&<AllRequestsPanel session={session} showToast={showToast}/>}
           {tab==="studies"&&<StudiesPanel session={session} showToast={showToast}/>}
+          {tab==="songs"&&<SongsPanel session={session} showToast={showToast}/>}
           {tab==="logs"&&<LogsPanel/>}
         </div>
       </div>
@@ -1369,8 +1371,11 @@ function MeetingsPanel({session,showToast}){
   const[editAttModal,setEditAttModal]=useState(null)
   const[preacherSearch,setPreacherSearch]=useState(false)
   const[studySearch,setStudySearch]=useState(false)
+  const[songSearch,setSongSearch]=useState(false)
+  const[selectedSongs,setSelectedSongs]=useState([])
   const[marks,setMarks]=useState({})
   const{data:studies}=useTable("studies")
+  const{data:allSongs}=useTable("songs")
   const[saving,setSaving]=useState(false)
   const[cellFilter,setCellFilter]=useState("")
 
@@ -1383,7 +1388,9 @@ function MeetingsPanel({session,showToast}){
 
   function openNew(){setForm({...emptyForm,cell_id:session?.cell_id||""});setEditing(null);setMarks({});setStep("form")}
   function openEdit(meeting){
+    const songList=meeting.songs?meeting.songs.split(", ").filter(Boolean):[]
     setForm({cell_id:meeting.cell_id||"",date:meeting.date,theme:meeting.theme||"",preacher:meeting.preacher||"",songs:meeting.songs||"",photos_link:meeting.photos_link||"",is_general:meeting.is_general||false})
+    setSelectedSongs(songList)
     setEditing(meeting.id);setMarks({});setStep("form")
   }
 
@@ -1518,7 +1525,25 @@ function MeetingsPanel({session,showToast}){
             <button type="button" onClick={()=>setPreacherSearch(true)} style={{background:C.primary+"15",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.primary,display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
           </div>
         </div>
-        <Textarea label="Músicas Cantadas" value={form.songs} onChange={f("songs")} placeholder="Liste as músicas..." rows={2}/>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Músicas Cantadas</label>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
+            <input value={form.songs} onChange={e=>f("songs")(e.target.value)} placeholder="Digite manualmente ou use o botão..." style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
+            <button type="button" onClick={()=>setSongSearch(true)} style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.success,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,flexShrink:0,whiteSpace:"nowrap"}}>
+              <Icon name="music" size={14}/>Repertório
+            </button>
+          </div>
+          {selectedSongs.length>0&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {selectedSongs.map((s,i)=>(
+                <div key={i} style={{background:C.success+"10",border:`1px solid ${C.success}30`,borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:600,color:C.success,display:"flex",alignItems:"center",gap:6}}>
+                  🎵 {s}
+                  <button type="button" onClick={()=>{const ns=selectedSongs.filter((_,j)=>j!==i);setSelectedSongs(ns);f("songs")(ns.join(", "))}} style={{background:"none",border:"none",cursor:"pointer",color:C.success,display:"flex",padding:0}}><Icon name="x" size={12}/></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <Inp label="Link das Fotos" value={form.photos_link} onChange={f("photos_link")} placeholder="https://..."/>
         <Btn full onClick={saveForm} disabled={saving} icon={editing?"check":"chevron-right"}>
           {saving?"Salvando...":(editing?"Salvar Alterações":"Salvar e Fazer Chamada →")}
@@ -1576,6 +1601,30 @@ function MeetingsPanel({session,showToast}){
       {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cell_id} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
       {editAttModal&&<EditAttendanceModal date={editAttModal.meeting.date} cellId={editAttModal.meeting.cell_id} items={editAttModal.items} showToast={showToast} onClose={()=>setEditAttModal(null)}/>}
       <MemberSearchModal open={preacherSearch} title="Quem passou a Palavra?" members={members} onSelect={m=>f("preacher")(m.name)} onClose={()=>setPreacherSearch(false)}/>
+      <Modal open={songSearch} onClose={()=>setSongSearch(false)} title="Selecionar Músicas 🎵">
+        <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>Selecione quantas músicas quiser. Clique novamente para remover.</p>
+        {allSongs.length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhuma música no repertório ainda.</p>}
+        {allSongs.map(s=>{
+          const selected=selectedSongs.includes(s.title)
+          return(
+            <button key={s.id} onClick={()=>{
+              const ns=selected?selectedSongs.filter(t=>t!==s.title):[...selectedSongs,s.title]
+              setSelectedSongs(ns)
+              f("songs")(ns.join(", "))
+            }} style={{width:"100%",textAlign:"left",background:selected?C.success+"10":"#f8fafc",border:`1.5px solid ${selected?C.success:"#e8edf2"}`,borderRadius:12,padding:"10px 14px",cursor:"pointer",marginBottom:8,display:"flex",alignItems:"center",gap:10,transition:"all 0.1s"}}>
+              <div style={{width:28,height:28,borderRadius:8,background:selected?C.success:C.primary+"15",display:"flex",alignItems:"center",justifyContent:"center",color:selected?"#fff":C.primary,flexShrink:0,fontSize:14}}>
+                {selected?"✓":"♪"}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
+                {s.artist&&<div style={{fontSize:11,color:"#94a3b8"}}>{s.artist}</div>}
+              </div>
+              {s.link&&<a href={s.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:C.primary,display:"flex"}}><Icon name="link" size={14}/></a>}
+            </button>
+          )
+        })}
+        <Btn full onClick={()=>setSongSearch(false)} style={{marginTop:8}}>Confirmar Seleção ({selectedSongs.length})</Btn>
+      </Modal>
       <Modal open={studySearch} onClose={()=>setStudySearch(false)} title="Selecionar Estudo">
         {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhum estudo cadastrado. Cadastre em Estudos primeiro.</p>}
         {studies.filter(s=>!s.cell_id||s.cell_id===form.cell_id||form.is_general).sort((a,b)=>{const aA=isCurrentWeek(a.week_start,a.week_end)?1:0;const bA=isCurrentWeek(b.week_start,b.week_end)?1:0;return bA-aA}).map(s=>{
@@ -1878,6 +1927,117 @@ function EventsPanel({session,showToast}){
   )
 }
 
+
+
+// ─── SONGS PANEL ──────────────────────────────────────────────────────────────
+function SongsPanel({session,showToast}){
+  const{data:songs,loading,reload}=useTable("songs")
+  const[modal,setModal]=useState(false)
+  const[deleteId,setDeleteId]=useState(null)
+  const[search,setSearch]=useState("")
+  const[form,setForm]=useState({title:"",artist:"",link:""})
+  const f=k=>v=>setForm(p=>({...p,[k]:v}))
+  const canDelete=session?.role==="admin"||session?.role==="supervisor"
+
+  async function save(){
+    if(!form.title.trim()){showToast("Nome da música obrigatório","error");return}
+    // Check duplicate (case-insensitive)
+    const exists=songs.find(s=>s.title.trim().toLowerCase()===form.title.trim().toLowerCase())
+    if(exists){
+      showToast(`"${exists.title}" já está cadastrada!`,"error")
+      return
+    }
+    await supabase.from("songs").insert({
+      title:form.title.trim(),
+      artist:form.artist.trim(),
+      link:form.link.trim(),
+      created_by:session.id,
+      created_by_name:session.name
+    })
+    showToast("Música cadastrada! 🎵")
+    setModal(false);setForm({title:"",artist:"",link:""})
+  }
+
+  async function del(){
+    await supabase.from("songs").delete().eq("id",deleteId)
+    showToast("Música removida");setDeleteId(null)
+  }
+
+  const filtered=songs.filter(s=>
+    s.title.toLowerCase().includes(search.toLowerCase())||
+    (s.artist||"").toLowerCase().includes(search.toLowerCase())
+  )
+
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div>
+          <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:"0 0 2px"}}>Repertório 🎵</h2>
+          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{songs.length} música(s) cadastrada(s)</p>
+        </div>
+        <Btn icon="plus" size="sm" onClick={()=>setModal(true)}>Nova</Btn>
+      </div>
+
+      <div style={{position:"relative",marginBottom:14}}>
+        <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",pointerEvents:"none"}}><Icon name="search" size={15}/></div>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar música ou artista..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"10px 14px 10px 36px",fontSize:14,outline:"none",background:"#fff"}}/>
+      </div>
+
+      {loading&&<Loader/>}
+      {!loading&&filtered.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 20px"}}>
+          <div style={{fontSize:48,marginBottom:12}}>🎵</div>
+          <p style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>{search?"Nenhuma música encontrada":"Nenhuma música cadastrada ainda"}</p>
+          {!search&&<Btn onClick={()=>setModal(true)} icon="plus" style={{marginTop:8}}>Cadastrar primeira música</Btn>}
+        </div>
+      )}
+
+      <div style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",overflow:"hidden",boxShadow:"0 1px 6px rgba(0,0,0,0.05)"}}>
+        {filtered.map((s,i)=>(
+          <div key={s.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderTop:i>0?"1px solid #f1f5f9":"none"}}>
+            <div style={{width:40,height:40,borderRadius:12,background:C.primary+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:C.primary}}>
+              <Icon name="music" size={18}/>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
+              <div style={{fontSize:11,color:"#94a3b8"}}>{s.artist||"—"} • por {s.created_by_name?.split(" ")[0]}</div>
+            </div>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              {s.link&&(
+                <a href={s.link} target="_blank" rel="noopener noreferrer" style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,display:"flex",color:C.primary,textDecoration:"none"}}>
+                  <Icon name="link" size={14}/>
+                </a>
+              )}
+              {canDelete&&(
+                <button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger,display:"flex"}}>
+                  <Icon name="trash" size={14}/>
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Modal open={modal} onClose={()=>{setModal(false);setForm({title:"",artist:"",link:""})}} title="Nova Música">
+        <Inp label="Nome da Música *" value={form.title} onChange={f("title")} required placeholder="Ex: Não Desista de Você"/>
+        <Inp label="Artista / Ministério" value={form.artist} onChange={f("artist")} placeholder="Ex: Ministério Zoe"/>
+        <Inp label="Link (YouTube, Spotify...)" value={form.link} onChange={f("link")} placeholder="https://..."/>
+        <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#92400e",fontWeight:500}}>
+          ⚠️ O sistema não permite músicas duplicadas. Se a música já estiver cadastrada, não será possível adicionar novamente.
+        </div>
+        <Btn full onClick={save} icon="music">Cadastrar Música</Btn>
+      </Modal>
+
+      {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}>
+        <p style={{color:"#64748b",marginBottom:16}}>Remover esta música do repertório?</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Btn variant="ghost" onClick={()=>setDeleteId(null)}>Cancelar</Btn>
+          <Btn variant="danger" onClick={del}>Excluir</Btn>
+        </div>
+      </Modal>}
+    </div>
+  )
+}
 
 // ─── STUDIES PANEL ────────────────────────────────────────────────────────────
 function StudiesPanel({session,showToast}){
@@ -2364,6 +2524,7 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
     {id:"messages",icon:"message",label:"Mensagens",desc:"Comunicados",color:"#0891b2"},
     {id:"requests",icon:"inbox",label:"Solicitações",desc:"Inativações e alterações",color:C.danger},
     {id:"studies",icon:"star",label:"Estudos",desc:"Material de estudo",color:C.primary},
+    {id:"songs",icon:"music",label:"Músicas",desc:"Repertório da célula",color:C.success},
   ]
 
   function renderSub(){
@@ -2375,6 +2536,7 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
     if(sub==="messages")return<MessagesPanel session={session} showToast={showToast}/>
     if(sub==="requests")return<AllRequestsPanel session={session} showToast={showToast}/>
     if(sub==="studies")return<StudiesPanel session={session} showToast={showToast}/>
+    if(sub==="songs")return<SongsPanel session={session} showToast={showToast}/>
     return null
   }
 
@@ -2601,7 +2763,7 @@ function MemberPortal({session,logout,showToast}){
           </div>
         </div>
         <div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.08)",borderRadius:14,padding:3}}>
-          {[["dados","Meus Dados"],["celula","Minha Célula"],["presenca","Presença"],["oracao","Oração"]].map(([id,label])=>(
+          {[["dados","Dados"],["celula","Célula"],["presenca","Presença"],["oracao","Oração"],["aniversario","🎂"]].map(([id,label])=>(
             <button key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"8px 4px",borderRadius:12,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:tab===id?"#fff":"transparent",color:tab===id?C.primary:"rgba(255,255,255,0.6)",transition:"all 0.15s"}}>{label}</button>
           ))}
         </div>
@@ -2705,6 +2867,117 @@ function MemberPortal({session,logout,showToast}){
                 </Card>
               )
             })}
+          </div>
+        )}
+
+        {tab==="aniversario"&&(
+          <div>
+            <h3 style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:6}}>🎂 Aniversariantes</h3>
+            <p style={{fontSize:13,color:"#64748b",marginBottom:16}}>Pessoas da sua célula que estão de parabéns!</p>
+
+            {/* SEMANA */}
+            {(()=>{
+              const{start,end}=getCurrentWeekDates()
+              const weekBdays=cellMembers.filter(m=>{
+                if(!m.birth_date)return false
+                const b=new Date(m.birth_date)
+                const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate())
+                return t>=start&&t<=end
+              })
+              const weekDays=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
+              return(
+                <div style={{marginBottom:20}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                    <div style={{width:4,height:20,background:C.gold,borderRadius:2}}/>
+                    <span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>Esta Semana</span>
+                    {weekBdays.length>0&&<span style={{background:C.gold,color:"#fff",fontSize:11,fontWeight:700,padding:"1px 8px",borderRadius:10}}>{weekBdays.length}</span>}
+                  </div>
+                  {weekBdays.length===0&&(
+                    <div style={{background:"#f8fafc",borderRadius:14,padding:"20px",textAlign:"center",border:"1px solid #f1f5f9"}}>
+                      <div style={{fontSize:32,marginBottom:8}}>🎂</div>
+                      <p style={{fontSize:13,color:"#94a3b8",fontWeight:600}}>Nenhum aniversariante esta semana</p>
+                    </div>
+                  )}
+                  {weekBdays.map(m=>{
+                    const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
+                    const dayName=weekDays[bDate.getDay()]
+                    const dayNum=String(bDate.getDate()).padStart(2,"0")
+                    const monthNum=String(bDate.getMonth()+1).padStart(2,"0")
+                    const firstName=m.name.split(" ")[0]
+                    const msg=`Olá ${firstName}! 🎂🎉 A Célula ${cell?.name} te deseja um feliz aniversário! Que Deus abençoe muito a sua vida. Parabéns! 🙏❤️`
+                    const wppLink=m.phone?`https://wa.me/55${m.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`:null
+                    const isToday=bDate.toDateString()===new Date().toDateString()
+                    return(
+                      <Card key={m.id} style={{marginBottom:10,border:`1.5px solid ${isToday?C.gold:"#fde68a"}`,background:isToday?"#fffbeb":"#fffef5"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:12}}>
+                          <Avatar name={m.name} photo={m.photo_url} size={46} color={C.gold}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            {isToday&&<div style={{fontSize:10,fontWeight:800,color:C.gold,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>🎉 Hoje!</div>}
+                            <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                            <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>{isToday?"Parabéns! 🎂":`${dayName}, ${dayNum}/${monthNum}`}</div>
+                            {m.age&&<div style={{fontSize:11,color:"#b45309"}}>Completa {m.age+1} anos</div>}
+                          </div>
+                          {wppLink&&(
+                            <a href={wppLink} target="_blank" rel="noopener noreferrer" style={{background:"#25d366",borderRadius:12,padding:"8px 12px",display:"flex",alignItems:"center",gap:5,color:"#fff",textDecoration:"none",fontSize:12,fontWeight:700,flexShrink:0}}>
+                              <Icon name="whatsapp" size={14}/>Parabéns
+                            </a>
+                          )}
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+
+            {/* MÊS */}
+            {(()=>{
+              const currentMonth=getCurrentMonth()
+              const monthNames=["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+              const monthBdays=cellMembers.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
+                .sort((a,b)=>new Date(a.birth_date).getDate()-new Date(b.birth_date).getDate())
+              return(
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                    <div style={{width:4,height:20,background:C.primary,borderRadius:2}}/>
+                    <span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>Todo o Mês de {monthNames[currentMonth]}</span>
+                    {monthBdays.length>0&&<span style={{background:C.primary,color:"#fff",fontSize:11,fontWeight:700,padding:"1px 8px",borderRadius:10}}>{monthBdays.length}</span>}
+                  </div>
+                  {monthBdays.length===0&&(
+                    <div style={{background:"#f8fafc",borderRadius:14,padding:"20px",textAlign:"center",border:"1px solid #f1f5f9"}}>
+                      <p style={{fontSize:13,color:"#94a3b8",fontWeight:600}}>Nenhum aniversariante este mês</p>
+                    </div>
+                  )}
+                  {monthBdays.map(m=>{
+                    const bDate=new Date(m.birth_date)
+                    const dayNum=String(bDate.getDate()).padStart(2,"0")
+                    const firstName=m.name.split(" ")[0]
+                    const msg=`Olá ${firstName}! 🎂🎉 A Célula ${cell?.name} te deseja um feliz aniversário! Que Deus abençoe muito a sua vida. Parabéns! 🙏❤️`
+                    const wppLink=m.phone?`https://wa.me/55${m.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`:null
+                    const{start,end}=getCurrentWeekDates()
+                    const thisYear=new Date(new Date().getFullYear(),bDate.getMonth(),bDate.getDate())
+                    const isThisWeek=thisYear>=start&&thisYear<=end
+                    return(
+                      <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderTop:"1px solid #f1f5f9"}}>
+                        <div style={{width:36,height:36,borderRadius:10,background:C.primary+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <span style={{fontSize:14,fontWeight:900,color:C.primary}}>{dayNum}</span>
+                        </div>
+                        <Avatar name={m.name} photo={m.photo_url} size={34} color={C.primary}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                          <div style={{fontSize:11,color:"#64748b"}}>{isThisWeek?"🎉 Esta semana!":fmtDate(m.birth_date)}{m.age?` • ${m.age+1} anos`:""}</div>
+                        </div>
+                        {wppLink&&(
+                          <a href={wppLink} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",borderRadius:8,padding:"5px 8px",display:"flex",alignItems:"center",gap:4,color:"#166534",textDecoration:"none",fontSize:11,fontWeight:700,flexShrink:0}}>
+                            <Icon name="whatsapp" size={12}/>Wish
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </div>
         )}
 
