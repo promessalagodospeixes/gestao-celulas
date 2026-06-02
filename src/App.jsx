@@ -12,7 +12,7 @@ const FREQUENCIES = ["Semanal","Quinzenal","Mensal"]
 const REACTIONS = ["🙏","❤️","🔥","✝️","😭","🙌"]
 
 // Cores da Promessa
-const C = { 
+const C = {
   primary: "#1B4F8A",
   gold: "#E8921A",
   dark: "#0f172a",
@@ -586,15 +586,16 @@ function AdminDashboard({session,logout,showToast}){
   const[showChangePw,setShowChangePw]=useState(false)
   const tabs=[
     {id:"dashboard",label:"Painel",icon:"gauge"},
+    {id:"meetings",label:"Encontros",icon:"meeting"},
+    {id:"prayer",label:"Orações",icon:"pray"},
+    {id:"studies",label:"Estudos",icon:"star"},
+    {id:"songs",label:"Músicas",icon:"music"},
+    {id:"events",label:"Eventos",icon:"event"},
     {id:"cells",label:"Células",icon:"grid"},
     {id:"members",label:"Membros",icon:"users"},
-    {id:"meetings",label:"Encontros",icon:"meeting"},
-    {id:"events",label:"Eventos",icon:"event"},
-    {id:"prayer",label:"Orações",icon:"pray"},
     {id:"reports",label:"Relatórios",icon:"bar-chart"},
     {id:"messages",label:"Mensagens",icon:"message"},
     {id:"requests",label:"Solicits.",icon:"inbox"},
-    {id:"studies",label:"Estudos",icon:"star"},
     {id:"logs",label:"Auditoria",icon:"history"},
   ]
   return(
