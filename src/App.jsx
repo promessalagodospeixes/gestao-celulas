@@ -181,7 +181,7 @@ const Inp=({label,value,onChange,type="text",placeholder="",required=false,readO
     {hint&&<p style={{fontSize:11,color:"#94a3b8",marginTop:4,marginBottom:0}}>{hint}</p>}
   </div>
 )
- 
+
 const Sel=({label,value,onChange,options,required=false})=>(
   <div style={{marginBottom:14}}>
     {label&&<label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</label>}
