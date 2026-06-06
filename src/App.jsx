@@ -26,7 +26,13 @@ const C = {
 }
 
 function fmtDate(d){if(!d)return"—";try{const[y,m,day]=d.split("-");return`${day}/${m}/${y}`}catch{return d}}
-function calcAge(dob){if(!dob)return null;const b=new Date(dob),n=new Date();let a=n.getFullYear()-b.getFullYear();if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))a--;return a}
+function parseDate(str){
+  // Parse YYYY-MM-DD without timezone shift
+  if(!str)return null
+  const[y,m,d]=str.split("-").map(Number)
+  return new Date(y,m-1,d)
+}
+function calcAge(dob){if(!dob)return null;const b=parseDate(dob),n=new Date();let a=n.getFullYear()-b.getFullYear();if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))a--;return a}
 function fmtCPF(v){const d=v.replace(/\D/g,"");if(d.length>9)return d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6,9)+"-"+d.slice(9,11);if(d.length>6)return d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6);if(d.length>3)return d.slice(0,3)+"."+d.slice(3);return d}
 function fmtPhone(v){const d=v.replace(/\D/g,"");if(d.length>10)return`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}`;if(d.length>6)return`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;if(d.length>2)return`(${d.slice(0,2)}) ${d.slice(2)}`;return d}
 function todayStr(){return new Date().toISOString().split("T")[0]}
@@ -203,9 +209,11 @@ const Modal=({open,onClose,title,children})=>{
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.65)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
       <div style={{background:"#fff",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 32px rgba(0,0,0,0.15)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 20px 14px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
-          <h3 style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>{title}</h3>
-          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:7,cursor:"pointer",display:"flex",color:"#64748b"}}><Icon name="x" size={15}/></button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px 14px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
+          <h3 style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a",flex:1,paddingRight:12}}>{title}</h3>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:12,padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,color:"#64748b",fontSize:13,fontWeight:700,flexShrink:0}}>
+            <Icon name="x" size={16}/>Fechar
+          </button>
         </div>
         <div style={{overflowY:"auto",padding:"16px 20px 32px",flex:1}}>{children}</div>
       </div>
@@ -691,12 +699,12 @@ function AdminOverview({session,showToast,setTab}){
   const birthdays=members.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
   const weekBirthdays=members.filter(m=>{
     if(!m.birth_date)return false
-    const b=new Date(m.birth_date)
+    const b=parseDate(m.birth_date)
     const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate())
     return t>=start&&t<=end
   }).map(m=>{
     const cell=cells.find(c=>c.id===m.cell_id)
-    const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
+    const bDate=new Date(new Date().getFullYear(),parseDate(m.birth_date).getMonth(),parseDate(m.birth_date).getDate())
     const weekDays=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
     const dayName=weekDays[bDate.getDay()]
     const dayNum=String(bDate.getDate()).padStart(2,"0")
@@ -1366,11 +1374,13 @@ function MeetingsPanel({session,showToast}){
   const{data:comments}=useTable("meeting_comments")
   // step: "form" | "attendance"
   const[step,setStep]=useState(null) // null = closed
+  const[deleteMeetingId,setDeleteMeetingId]=useState(null)
   const[editing,setEditing]=useState(null)
   const[savedMeeting,setSavedMeeting]=useState(null)
   const[commentsModal,setCommentsModal]=useState(null)
   const[editAttModal,setEditAttModal]=useState(null)
   const[preacherSearch,setPreacherSearch]=useState(false)
+  const[preacherKidsSearch,setPreacherKidsSearch]=useState(false)
   const[studySearch,setStudySearch]=useState(false)
   const[songSearch,setSongSearch]=useState(false)
   const[selectedSongs,setSelectedSongs]=useState([])
@@ -1380,7 +1390,7 @@ function MeetingsPanel({session,showToast}){
   const[saving,setSaving]=useState(false)
   const[cellFilter,setCellFilter]=useState("")
 
-  const emptyForm={cell_id:session?.cell_id||"",date:todayStr(),theme:"",preacher:"",songs:"",photos_link:"",is_general:false}
+  const emptyForm={cell_id:session?.cell_id||"",date:todayStr(),theme:"",preacher:"",preacher_kids:"",songs:"",photos_link:"",is_general:false}
   const[form,setForm]=useState(emptyForm)
   const f=k=>v=>setForm(p=>({...p,[k]:v}))
 
@@ -1390,7 +1400,7 @@ function MeetingsPanel({session,showToast}){
   function openNew(){setForm({...emptyForm,cell_id:session?.cell_id||""});setEditing(null);setMarks({});setStep("form")}
   function openEdit(meeting){
     const songList=meeting.songs?meeting.songs.split(", ").filter(Boolean):[]
-    setForm({cell_id:meeting.cell_id||"",date:meeting.date,theme:meeting.theme||"",preacher:meeting.preacher||"",songs:meeting.songs||"",photos_link:meeting.photos_link||"",is_general:meeting.is_general||false})
+    setForm({cell_id:meeting.cell_id||"",date:meeting.date,theme:meeting.theme||"",preacher:meeting.preacher||"",preacher_kids:meeting.preacher_kids||"",songs:meeting.songs||"",photos_link:meeting.photos_link||"",is_general:meeting.is_general||false})
     setSelectedSongs(songList)
     setEditing(meeting.id);setMarks({});setStep("form")
   }
@@ -1475,6 +1485,7 @@ function MeetingsPanel({session,showToast}){
                 </div>
                 {meeting.theme&&<div style={{fontSize:12,color:"#64748b"}}>📖 {meeting.theme}</div>}
                 {meeting.preacher&&<div style={{fontSize:12,color:"#64748b"}}>🎤 {meeting.preacher}</div>}
+                {meeting.preacher_kids&&<div style={{fontSize:12,color:"#64748b"}}>👧 {meeting.preacher_kids}</div>}
                 {meeting.songs&&<div style={{fontSize:12,color:"#64748b"}}>🎵 {meeting.songs}</div>}
               </div>
               <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}>
@@ -1520,10 +1531,17 @@ function MeetingsPanel({session,showToast}){
           </div>
         </div>
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Quem passou a Palavra</label>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>🎤 Quem passou a Palavra (Adultos)</label>
           <div style={{display:"flex",gap:8}}>
             <input value={form.preacher} onChange={e=>f("preacher")(e.target.value)} placeholder="Nome do pregador" style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
             <button type="button" onClick={()=>setPreacherSearch(true)} style={{background:C.primary+"15",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.primary,display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>👧 Quem passou a Palavra (Kids)</label>
+          <div style={{display:"flex",gap:8}}>
+            <input value={form.preacher_kids} onChange={e=>f("preacher_kids")(e.target.value)} placeholder="Nome do pregador Kids" style={{flex:1,border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none"}}/>
+            <button type="button" onClick={()=>setPreacherKidsSearch(true)} style={{background:"#fef3c7",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",color:C.gold,display:"flex",alignItems:"center"}}><Icon name="search" size={14}/></button>
           </div>
         </div>
         <div style={{marginBottom:14}}>
@@ -1601,11 +1619,28 @@ function MeetingsPanel({session,showToast}){
 
       {commentsModal&&<CommentsModal date={commentsModal.date} cellId={commentsModal.cell_id} session={session} showToast={showToast} onClose={()=>setCommentsModal(null)}/>}
       {editAttModal&&<EditAttendanceModal date={editAttModal.meeting.date} cellId={editAttModal.meeting.cell_id} items={editAttModal.items} showToast={showToast} onClose={()=>setEditAttModal(null)}/>}
-      <MemberSearchModal open={preacherSearch} title="Quem passou a Palavra?" members={members} onSelect={m=>f("preacher")(m.name)} onClose={()=>setPreacherSearch(false)}/>
+      {deleteMeetingId&&<Modal open title="Excluir Encontro" onClose={()=>setDeleteMeetingId(null)}>
+        <p style={{color:"#64748b",marginBottom:16}}>Excluir este encontro e toda a presença registrada?</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Btn variant="ghost" onClick={()=>setDeleteMeetingId(null)}>Cancelar</Btn>
+          <Btn variant="danger" onClick={async()=>{
+            await supabase.from("attendance").delete().eq("date",(meetings.find(m=>m.id===deleteMeetingId)||{}).date).eq("cell_id",(meetings.find(m=>m.id===deleteMeetingId)||{}).cell_id)
+            await supabase.from("meetings").delete().eq("id",deleteMeetingId)
+            showToast("Encontro excluído")
+            setDeleteMeetingId(null)
+          }}>Excluir</Btn>
+        </div>
+      </Modal>}
+      <MemberSearchModal open={preacherSearch} title="🎤 Quem passou a Palavra? (Adultos)" members={members} onSelect={m=>f("preacher")(m.name)} onClose={()=>setPreacherSearch(false)}/>
+      <MemberSearchModal open={preacherKidsSearch} title="👧 Quem passou a Palavra? (Kids)" members={members} onSelect={m=>f("preacher_kids")(m.name)} onClose={()=>setPreacherKidsSearch(false)}/>
       <Modal open={songSearch} onClose={()=>setSongSearch(false)} title="Selecionar Músicas 🎵">
-        <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>Selecione quantas músicas quiser. Clique novamente para remover.</p>
-        {allSongs.length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhuma música no repertório ainda.</p>}
-        {allSongs.map(s=>{
+        <p style={{fontSize:12,color:"#64748b",marginBottom:10}}>Selecione quantas músicas quiser. Clique novamente para remover.</p>
+        <div style={{position:"relative",marginBottom:12}}>
+          <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",pointerEvents:"none"}}><Icon name="search" size={15}/></div>
+          <input id="songSearchInput" placeholder="Buscar música ou artista..." autoFocus style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px 10px 36px",fontSize:14,outline:"none"}} onChange={e=>{const v=e.target.value.toLowerCase();document.querySelectorAll(".song-item").forEach(el=>{el.style.display=el.dataset.title.includes(v)||el.dataset.artist.includes(v)?"flex":"none"})}}/>
+        </div>
+        {allSongs.filter(s=>(s.status||"approved")==="approved").length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhuma música no repertório ainda.</p>}
+        {allSongs.filter(s=>(s.status||"approved")==="approved").map(s=>{
           const selected=selectedSongs.includes(s.title)
           return(
             <button key={s.id} onClick={()=>{
@@ -2555,7 +2590,7 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
 
   const currentMonth=getCurrentMonth()
   const{start,end}=getCurrentWeekDates()
-  const weekBirthdays=members.filter(m=>m.cell_id===session.cell_id&&m.birth_date&&(()=>{const b=new Date(m.birth_date);const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate());return t>=start&&t<=end})())
+  const weekBirthdays=members.filter(m=>m.cell_id===session.cell_id&&m.birth_date&&(()=>{const b=parseDate(m.birth_date);const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate());return t>=start&&t<=end})())
   const pendingPrayers=prayers.filter(p=>p.cell_id===session.cell_id&&p.status==="pending").length
 
   const menu=[
@@ -2604,7 +2639,7 @@ function LeaderSecretaryDashboard({session,logout,showToast}){
                 <span style={{color:"#fff",fontSize:13,fontWeight:800}}>Aniversário esta semana!</span>
               </div>
               {weekBirthdays.map(m=>{
-                const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
+                const bDate=new Date(new Date().getFullYear(),parseDate(m.birth_date).getMonth(),parseDate(m.birth_date).getDate())
                 const weekDays=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
                 const dayName=weekDays[bDate.getDay()]
                 const dayNum=String(bDate.getDate()).padStart(2,"0")
@@ -2787,7 +2822,7 @@ function MemberPortal({session,logout,showToast}){
   const[suggestForm,setSuggestForm]=useState({title:"",artist:"",lyrics:""})
 
   const{start,end}=getCurrentWeekDates()
-  const weekBirthday=member?.birth_date&&(()=>{const b=new Date(member.birth_date);const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate());return t>=start&&t<=end})()
+  const weekBirthday=member?.birth_date&&(()=>{const b=parseDate(member.birth_date);const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate());return t>=start&&t<=end})()
 
   async function submitPrayer(){
     if(!prayerForm.request.trim()){showToast("Descreva o pedido","error");return}
@@ -2983,7 +3018,7 @@ function MemberPortal({session,logout,showToast}){
               const{start,end}=getCurrentWeekDates()
               const weekBdays=cellMembers.filter(m=>{
                 if(!m.birth_date)return false
-                const b=new Date(m.birth_date)
+                const b=parseDate(m.birth_date)
                 const t=new Date(new Date().getFullYear(),b.getMonth(),b.getDate())
                 return t>=start&&t<=end
               })
@@ -3002,7 +3037,7 @@ function MemberPortal({session,logout,showToast}){
                     </div>
                   )}
                   {weekBdays.map(m=>{
-                    const bDate=new Date(new Date().getFullYear(),new Date(m.birth_date).getMonth(),new Date(m.birth_date).getDate())
+                    const bDate=new Date(new Date().getFullYear(),parseDate(m.birth_date).getMonth(),parseDate(m.birth_date).getDate())
                     const dayName=weekDays[bDate.getDay()]
                     const dayNum=String(bDate.getDate()).padStart(2,"0")
                     const monthNum=String(bDate.getMonth()+1).padStart(2,"0")
@@ -3038,7 +3073,7 @@ function MemberPortal({session,logout,showToast}){
               const currentMonth=getCurrentMonth()
               const monthNames=["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
               const monthBdays=cellMembers.filter(m=>m.birth_date&&getMonthBirthday(m.birth_date)===currentMonth)
-                .sort((a,b)=>new Date(a.birth_date).getDate()-new Date(b.birth_date).getDate())
+                .sort((a,b)=>parseDate(a.birth_date).getDate()-new Date(b.birth_date).getDate())
               return(
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
@@ -3052,7 +3087,7 @@ function MemberPortal({session,logout,showToast}){
                     </div>
                   )}
                   {monthBdays.map(m=>{
-                    const bDate=new Date(m.birth_date)
+                    const bDate=parseDate(m.birth_date)
                     const dayNum=String(bDate.getDate()).padStart(2,"0")
                     const firstName=m.name.split(" ")[0]
                     const msg=`Olá ${firstName}! 🎂🎉 A Célula ${cell?.name} te deseja um feliz aniversário! Que Deus abençoe muito a sua vida. Parabéns! 🙏❤️`
