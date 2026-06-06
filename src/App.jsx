@@ -1270,6 +1270,13 @@ function MembersPanel({session,showToast}){
           </div>
           {form.baptized&&<Inp label="Data do Batismo (opcional)" type="date" value={form.baptism_date} onChange={f("baptism_date")}/>}
         </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:"0.05em",textTransform:"uppercase"}}>⛪ Membro da Promessa Lago dos Peixes?</label>
+          <div style={{display:"flex",gap:8}}>
+            <button type="button" onClick={()=>f("church_member")(true)} style={{flex:1,padding:"10px",borderRadius:10,fontSize:13,fontWeight:700,border:`1.5px solid ${form.church_member===true?C.primary:"#e2e8f0"}`,background:form.church_member===true?C.primary+"15":"#f8fafc",color:form.church_member===true?C.primary:"#64748b",cursor:"pointer"}}>⛪ Sim</button>
+            <button type="button" onClick={()=>f("church_member")(false)} style={{flex:1,padding:"10px",borderRadius:10,fontSize:13,fontWeight:700,border:`1.5px solid ${form.church_member===false?"#dc2626":"#e2e8f0"}`,background:form.church_member===false?"#fee2e2":"#f8fafc",color:form.church_member===false?"#dc2626":"#64748b",cursor:"pointer"}}>✗ Não</button>
+          </div>
+        </div>
         <div style={{borderTop:"1px solid #f1f5f9",margin:"8px 0",paddingTop:12}}>
           <p style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:10,textTransform:"uppercase",letterSpacing:"0.05em"}}>Família</p>
           {[["father_name","Pai"],["mother_name","Mãe"],["spouse_name","Cônjuge"]].map(([field,label])=>(
@@ -1383,6 +1390,7 @@ function MeetingsPanel({session,showToast}){
   const[preacherKidsSearch,setPreacherKidsSearch]=useState(false)
   const[studySearch,setStudySearch]=useState(false)
   const[songSearch,setSongSearch]=useState(false)
+  const[songQuery,setSongQuery]=useState("")
   const[selectedSongs,setSelectedSongs]=useState([])
   const[marks,setMarks]=useState({})
   const{data:studies}=useTable("studies")
@@ -1637,10 +1645,10 @@ function MeetingsPanel({session,showToast}){
         <p style={{fontSize:12,color:"#64748b",marginBottom:10}}>Selecione quantas músicas quiser. Clique novamente para remover.</p>
         <div style={{position:"relative",marginBottom:12}}>
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",pointerEvents:"none"}}><Icon name="search" size={15}/></div>
-          <input id="songSearchInput" placeholder="Buscar música ou artista..." autoFocus style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px 10px 36px",fontSize:14,outline:"none"}} onChange={e=>{const v=e.target.value.toLowerCase();document.querySelectorAll(".song-item").forEach(el=>{el.style.display=el.dataset.title.includes(v)||el.dataset.artist.includes(v)?"flex":"none"})}}/>
+          <input value={songQuery} onChange={e=>setSongQuery(e.target.value)} placeholder="Buscar música ou artista..." autoFocus style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px 10px 36px",fontSize:14,outline:"none"}}/>
         </div>
         {allSongs.filter(s=>(s.status||"approved")==="approved").length===0&&<p style={{color:"#94a3b8",textAlign:"center",fontSize:13}}>Nenhuma música no repertório ainda.</p>}
-        {allSongs.filter(s=>(s.status||"approved")==="approved").map(s=>{
+        {allSongs.filter(s=>(s.status||"approved")==="approved"&&(s.title.toLowerCase().includes(songQuery.toLowerCase())||(s.artist||"").toLowerCase().includes(songQuery.toLowerCase()))).map(s=>{
           const selected=selectedSongs.includes(s.title)
           return(
             <button key={s.id} onClick={()=>{
