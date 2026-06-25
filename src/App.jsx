@@ -1106,6 +1106,16 @@ function MembersPanel({session,showToast}){
   const[inactivateModal,setInactivateModal]=useState(null)
   const[inactiveReason,setInactiveReason]=useState("")
   const[reactivateModal,setReactivateModal]=useState(null)
+  const[requestInactModal,setRequestInactModal]=useState(null)
+  const[requestInactReason,setRequestInactReason]=useState("")
+
+  async function submitInactRequest(){
+    if(!requestInactReason.trim()){showToast("Informe o motivo","error");return}
+    const m=members.find(x=>x.id===requestInactModal)
+    await supabase.from("inactivation_requests").insert({member_id:m.id,member_name:m.name,cell_id:m.cell_id||null,reason:requestInactReason.trim(),requested_by:session.id,requested_by_name:session.name,status:"pending"})
+    await addLog(session,"create",`Solicitação de inativação enviada: ${m.name}`)
+    showToast("Solicitação enviada ao gestor!");setRequestInactModal(null);setRequestInactReason("")
+  }
 
   const emptyForm={name:"",cpf:"",birth_date:"",age:"",gender:"Masculino",phone:"",email:"",neighborhood:"",cell_id:"",status:"Visitante",baptized:false,baptism_date:"",invited_by:"",father_name:"",mother_name:"",spouse_name:"",photo_url:"",church_member:false}
   const[form,setForm]=useState(emptyForm)
@@ -1265,6 +1275,7 @@ function MembersPanel({session,showToast}){
                 {!isInativo&&<button onClick={e=>{e.stopPropagation();setCardModal(m)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#64748b"}}><Icon name="id-card" size={13}/></button>}
                 {!isInativo&&<button onClick={e=>{e.stopPropagation();openEdit(m)}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:C.primary}}><Icon name="edit" size={13}/></button>}
                 {!isInativo&&canInactivate&&<button onClick={e=>{e.stopPropagation();setInactivateModal(m.id);setInactiveReason("")}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:700}}>Inativar</button>}
+                {!isInativo&&!canInactivate&&(session?.role==="leader"||session?.role==="secretary")&&<button onClick={e=>{e.stopPropagation();setRequestInactModal(m.id);setRequestInactReason("")}} style={{background:"#fef3c7",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:C.warning,fontSize:11,fontWeight:700}}>Solicitar Inativação</button>}
                 {isInativo&&canInactivate&&<button onClick={e=>{e.stopPropagation();setReactivateModal(m.id)}} style={{background:"#dcfce7",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:C.success,fontSize:11,fontWeight:700}}>Reativar</button>}
                 {session?.role==="admin"&&<button onClick={e=>{e.stopPropagation();setDeleteId(m.id)}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:C.danger}}><Icon name="trash" size={13}/></button>}
               </div>
@@ -1347,6 +1358,17 @@ function MembersPanel({session,showToast}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <Btn variant="ghost" onClick={()=>setReactivateModal(null)}>Cancelar</Btn>
           <Btn variant="success" onClick={confirmReactivate}>Reativar</Btn>
+        </div>
+      </Modal>
+
+      <Modal open={!!requestInactModal} onClose={()=>setRequestInactModal(null)} title="Solicitar Inativação">
+        <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+          <p style={{color:"#92400e",fontSize:13,fontWeight:700,margin:0}}>⏳ Sua solicitação será enviada ao gestor/supervisor para aprovação.</p>
+        </div>
+        <Textarea label="Motivo da inativação" value={requestInactReason} onChange={setRequestInactReason} placeholder="Ex: Mudança de cidade, afastamento..." rows={3}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:8}}>
+          <Btn variant="ghost" onClick={()=>setRequestInactModal(null)}>Cancelar</Btn>
+          <Btn variant="warning" onClick={submitInactRequest}>Enviar Solicitação</Btn>
         </div>
       </Modal>
     </div>
@@ -2555,9 +2577,17 @@ function AllRequestsPanel({session,showToast}){
   }
 
   async function resolveInact(id,status){
+    const req=inactReqs.find(r=>r.id===id)
     await supabase.from("inactivation_requests").update({status,resolved_by:session.id,resolved_at:new Date().toISOString()}).eq("id",id)
-    if(status==="approved"){const req=inactReqs.find(r=>r.id===id);if(req){await supabase.from("users").update({active:false}).eq("member_id",req.member_id)}}
-    showToast(status==="approved"?"Aprovado! Membro inativado.":"Rejeitado")
+    if(status==="approved"&&req){
+      await supabase.from("members").update({status:"Inativo",inactive_reason:req.reason,inactivated_at:new Date().toISOString(),inactivated_by:session.name}).eq("id",req.member_id)
+      await supabase.from("users").update({active:false}).eq("member_id",req.member_id)
+      await addLog(session,"update",`Inativação aprovada: ${req.member_name} — Motivo: ${req.reason}`)
+    }
+    if(status==="rejected"&&req){
+      await addLog(session,"update",`Inativação rejeitada: ${req.member_name}`)
+    }
+    showToast(status==="approved"?"Aprovado! Membro inativado.":"Solicitação rejeitada")
   }
 
   async function resolveCellReq(id,status){
