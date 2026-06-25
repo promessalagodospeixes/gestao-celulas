@@ -1086,6 +1086,7 @@ function MembersPanel({session,showToast}){
   const{data:allMembers,loading}=useTable("members")
   const{data:cells}=useTable("cells")
   const isAdmin=session?.role==="admin"||session?.role==="supervisor"
+  const canInactivate=session?.role==="admin"||session?.role==="supervisor"
   // Leader/secretary only see their cell's members
   const members=isAdmin?allMembers:allMembers.filter(m=>m.cell_id===session?.cell_id)
   const[modal,setModal]=useState(false)
@@ -1101,6 +1102,10 @@ function MembersPanel({session,showToast}){
   const[showFamilySearch,setShowFamilySearch]=useState(false)
   const[familyField,setFamilyField]=useState(null)
   const[showInviterSearch,setShowInviterSearch]=useState(false)
+  const[showInactive,setShowInactive]=useState(false)
+  const[inactivateModal,setInactivateModal]=useState(null)
+  const[inactiveReason,setInactiveReason]=useState("")
+  const[reactivateModal,setReactivateModal]=useState(null)
 
   const emptyForm={name:"",cpf:"",birth_date:"",age:"",gender:"Masculino",phone:"",email:"",neighborhood:"",cell_id:"",status:"Visitante",baptized:false,baptism_date:"",invited_by:"",father_name:"",mother_name:"",spouse_name:"",photo_url:"",church_member:false}
   const[form,setForm]=useState(emptyForm)
@@ -1109,6 +1114,23 @@ function MembersPanel({session,showToast}){
   function openEdit(m){
     setForm({name:m.name,cpf:m.cpf||"",birth_date:m.birth_date||"",age:m.age||"",gender:m.gender||"Masculino",phone:m.phone||"",email:m.email||"",neighborhood:m.neighborhood||"",cell_id:m.cell_id||"",status:m.status||"Visitante",baptized:m.baptized||false,baptism_date:m.baptism_date||"",invited_by:m.invited_by||"",father_name:m.father_name||"",mother_name:m.mother_name||"",spouse_name:m.spouse_name||"",photo_url:m.photo_url||"",church_member:m.church_member||false})
     setEditing(m.id);setModal(true)
+  }
+
+  async function confirmInactivate(){
+    if(!inactiveReason.trim()){showToast("Justificativa obrigatória","error");return}
+    const m=members.find(x=>x.id===inactivateModal)
+    await supabase.from("members").update({status:"Inativo",inactive_reason:inactiveReason.trim(),inactivated_at:new Date().toISOString(),inactivated_by:session.name}).eq("id",inactivateModal)
+    await supabase.from("users").update({active:false}).eq("member_id",inactivateModal)
+    await addLog(session,"update",`Membro inativado: ${m?.name} — Motivo: ${inactiveReason.trim()}`)
+    showToast("Membro inativado");setInactivateModal(null);setInactiveReason("")
+  }
+
+  async function confirmReactivate(){
+    const m=members.find(x=>x.id===reactivateModal)
+    await supabase.from("members").update({status:"Membro",inactive_reason:null,inactivated_at:null,inactivated_by:null}).eq("id",reactivateModal)
+    await supabase.from("users").update({active:true}).eq("member_id",reactivateModal)
+    await addLog(session,"update",`Membro reativado: ${m?.name}`)
+    showToast("Membro reativado!");setReactivateModal(null)
   }
 
   async function save(){
@@ -1150,6 +1172,9 @@ function MembersPanel({session,showToast}){
   }
 
   const filtered=members.filter(m=>{
+    const isInativo=m.status==="Inativo"
+    if(isInativo&&!showInactive)return false
+    if(!isInativo&&showInactive&&filterStatus!=="Inativo")return false
     const matchSearch=m.name.toLowerCase().includes(search.toLowerCase())||(m.phone||"").includes(search)
     const matchStatus=!filterStatus||m.status===filterStatus
     const matchCell=!filterCell||(filterCell==="sem_celula"?!m.cell_id:m.cell_id===filterCell)
@@ -1167,15 +1192,19 @@ function MembersPanel({session,showToast}){
   const cOpts=[{value:"",label:"— Sem célula —"},...cells.map(c=>({value:c.id,label:c.name}))]
   const totalMembers=members.filter(m=>m.status==="Membro").length
   const totalVisitors=members.filter(m=>m.status==="Visitante").length
+  const totalInactive=members.filter(m=>m.status==="Inativo").length
 
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
         <div>
           <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:"0 0 2px"}}>Pessoas</h2>
-          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{totalMembers} membros • {totalVisitors} visitantes</p>
+          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{totalMembers} membros • {totalVisitors} visitantes{totalInactive>0?` • ${totalInactive} inativos`:""}</p>
         </div>
-        <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Novo</Btn>
+        <div style={{display:"flex",gap:6}}>
+          {totalInactive>0&&<button onClick={()=>{setShowInactive(p=>!p);setFilterStatus("")}} style={{background:showInactive?"#fee2e2":"#f1f5f9",border:`1.5px solid ${showInactive?C.danger:"#e2e8f0"}`,borderRadius:10,padding:"7px 12px",cursor:"pointer",color:showInactive?C.danger:"#64748b",fontSize:12,fontWeight:700}}>{showInactive?"← Ativos":"Ver Inativos"}</button>}
+          {!showInactive&&<Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Novo</Btn>}
+        </div>
       </div>
 
       <div style={{position:"relative",marginBottom:10}}>
@@ -1210,30 +1239,33 @@ function MembersPanel({session,showToast}){
         {filtered.map((m,i)=>{
           const cell=cells.find(c=>c.id===m.cell_id)
           const isMember=m.status==="Membro"
+          const isInativo=m.status==="Inativo"
           return(
-            <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderTop:i>0?"1px solid #f1f5f9":"none",transition:"background 0.1s",cursor:"pointer"}}
-              onMouseOver={e=>e.currentTarget.style.background="#f8fafc"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-              <Avatar name={m.name} photo={m.photo_url} size={38} color={isMember?C.primary:C.gold}/>
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderTop:i>0?"1px solid #f1f5f9":"none",transition:"background 0.1s",cursor:"pointer",background:isInativo?"#fafafa":"transparent",opacity:isInativo?0.8:1}}
+              onMouseOver={e=>e.currentTarget.style.background="#f8fafc"} onMouseOut={e=>e.currentTarget.style.background=isInativo?"#fafafa":"transparent"}>
+              <Avatar name={m.name} photo={m.photo_url} size={38} color={isInativo?"#94a3b8":isMember?C.primary:C.gold}/>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:14,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                <div style={{fontSize:14,fontWeight:700,color:isInativo?"#94a3b8":"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
                 <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
-                <span style={{fontSize:11,color:"#94a3b8"}}>{cell?.name||"Sem célula"}{m.age?` • ${m.age} anos`:""}</span>
-                {m.age&&getAgeGroup(m.age)&&<span style={{fontSize:10,fontWeight:700,color:getAgeGroup(m.age).color,background:getAgeGroup(m.age).color+"15",borderRadius:6,padding:"1px 6px"}}>{getAgeGroup(m.age).label}</span>}
-              </div>
+                  <span style={{fontSize:11,color:"#94a3b8"}}>{cell?.name||"Sem célula"}{m.age?` • ${m.age} anos`:""}</span>
+                  {m.age&&!isInativo&&getAgeGroup(m.age)&&<span style={{fontSize:10,fontWeight:700,color:getAgeGroup(m.age).color,background:getAgeGroup(m.age).color+"15",borderRadius:6,padding:"1px 6px"}}>{getAgeGroup(m.age).label}</span>}
+                  {isInativo&&m.inactivated_at&&<span style={{fontSize:10,color:"#94a3b8"}}>Inativado em {fmtDate(m.inactivated_at?.split("T")[0])}</span>}
+                </div>
+                {isInativo&&m.inactive_reason&&<div style={{fontSize:11,color:"#ef4444",marginTop:2}}>Motivo: {m.inactive_reason}</div>}
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-                {m.phone?(
+                {!isInativo&&m.phone?(
                   <a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:8,padding:"3px 8px",display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:"#166534",textDecoration:"none"}}>
                     <Icon name="whatsapp" size={11}/>{fmtPhone(m.phone)}
                   </a>
-                ):<span style={{fontSize:11,color:"#cbd5e1"}}>—</span>}
-                <div style={{display:"flex",gap:4}}>
-                  <Badge label={m.status} color={isMember?C.primary:C.gold}/>
-                </div>
+                ):<span style={{fontSize:11,color:"#cbd5e1"}}>{isInativo?"":""}</span>}
+                <Badge label={m.status} color={isInativo?"#94a3b8":isMember?C.primary:C.gold}/>
               </div>
               <div style={{display:"flex",gap:4,marginLeft:4}}>
-                <button onClick={e=>{e.stopPropagation();setCardModal(m)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#64748b"}}><Icon name="id-card" size={13}/></button>
-                <button onClick={e=>{e.stopPropagation();openEdit(m)}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:C.primary}}><Icon name="edit" size={13}/></button>
+                {!isInativo&&<button onClick={e=>{e.stopPropagation();setCardModal(m)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:"#64748b"}}><Icon name="id-card" size={13}/></button>}
+                {!isInativo&&<button onClick={e=>{e.stopPropagation();openEdit(m)}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:C.primary}}><Icon name="edit" size={13}/></button>}
+                {!isInativo&&canInactivate&&<button onClick={e=>{e.stopPropagation();setInactivateModal(m.id);setInactiveReason("")}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:700}}>Inativar</button>}
+                {isInativo&&canInactivate&&<button onClick={e=>{e.stopPropagation();setReactivateModal(m.id)}} style={{background:"#dcfce7",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:C.success,fontSize:11,fontWeight:700}}>Reativar</button>}
                 {session?.role==="admin"&&<button onClick={e=>{e.stopPropagation();setDeleteId(m.id)}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:6,cursor:"pointer",color:C.danger}}><Icon name="trash" size={13}/></button>}
               </div>
             </div>
@@ -1297,6 +1329,26 @@ function MembersPanel({session,showToast}){
       {cardModal&&<MemberCard member={cardModal} cells={cells} onClose={()=>setCardModal(null)}/>}
       {pwModal&&<Modal open title="Redefinir Senha" onClose={()=>setPwModal(null)}><Inp label="Nova Senha" type="password" value={newPw} onChange={setNewPw} placeholder="Mínimo 6 caracteres"/><Btn full onClick={resetPw}>Redefinir Senha</Btn></Modal>}
       {deleteId&&<Modal open title="Confirmar Exclusão" onClose={()=>setDeleteId(null)}><p style={{color:"#64748b",marginBottom:16}}>Remover permanentemente?</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Btn variant="ghost" onClick={()=>setDeleteId(null)}>Cancelar</Btn><Btn variant="danger" onClick={del}>Excluir</Btn></div></Modal>}
+
+      <Modal open={!!inactivateModal} onClose={()=>setInactivateModal(null)} title="Inativar Membro">
+        <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+          <p style={{color:"#991b1b",fontSize:13,fontWeight:700,margin:0}}>⚠️ O membro ficará inativo e não aparecerá nos relatórios, listas de presença ou aniversariantes.</p>
+        </div>
+        <p style={{fontSize:13,color:"#64748b",marginBottom:12}}>Informe o motivo da inativação:</p>
+        <Textarea label="Justificativa" value={inactiveReason} onChange={setInactiveReason} placeholder="Ex: Mudança de cidade, afastamento por doença, saída da célula..." rows={3}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:8}}>
+          <Btn variant="ghost" onClick={()=>setInactivateModal(null)}>Cancelar</Btn>
+          <Btn variant="danger" onClick={confirmInactivate}>Confirmar Inativação</Btn>
+        </div>
+      </Modal>
+
+      <Modal open={!!reactivateModal} onClose={()=>setReactivateModal(null)} title="Reativar Membro">
+        <p style={{fontSize:13,color:"#64748b",marginBottom:16}}>Deseja reativar este membro? Ele voltará a aparecer nas listas normalmente com status <strong>Membro</strong>.</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Btn variant="ghost" onClick={()=>setReactivateModal(null)}>Cancelar</Btn>
+          <Btn variant="success" onClick={confirmReactivate}>Reativar</Btn>
+        </div>
+      </Modal>
     </div>
   )
 }
