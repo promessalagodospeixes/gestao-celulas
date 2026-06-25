@@ -1420,6 +1420,8 @@ function MeetingsPanel({session,showToast}){
     const payload={...form,cell_id:form.is_general?null:form.cell_id||null,created_by:session.id}
     if(editing){
       await supabase.from("meetings").update(payload).eq("id",editing)
+      const cellName=cells.find(c=>c.id===form.cell_id)?.name||"Celulão"
+      await addLog(session,"update",`Encontro editado: ${cellName} — ${form.date}`)
       showToast("Encontro atualizado!")
       setStep(null);setEditing(null)
     }else{
@@ -1428,6 +1430,8 @@ function MeetingsPanel({session,showToast}){
         const cell=cells.find(c=>c.id===form.cell_id)
         if(cell?.auto_create_meetings)await supabase.from("cells").update({next_meeting_date:getNextMeetingDate(cell.day)}).eq("id",form.cell_id)
       }
+      const cellName=cells.find(c=>c.id===form.cell_id)?.name||"Celulão"
+      await addLog(session,"create",`Encontro registrado: ${cellName} — ${form.date}`)
       setSavedMeeting(newMeeting)
       showToast("Encontro criado! Agora faça a chamada 👇")
       setStep("attendance") // go straight to attendance
@@ -1456,7 +1460,7 @@ function MeetingsPanel({session,showToast}){
   function skipAttendance(){setStep(null);setMarks({});setSavedMeeting(null)}
 
   const myMeetings=isAdmin||session?.role==="supervisor"?meetings:meetings.filter(m=>m.cell_id===session?.cell_id||m.is_general)
-  const filteredMeetings=myMeetings.filter(m=>!cellFilter||m.cell_id===cellFilter||m.is_general)
+  const filteredMeetings=myMeetings.filter(m=>!cellFilter||m.cell_id===cellFilter||m.is_general).sort((a,b)=>b.date.localeCompare(a.date))
   const currentMeeting=savedMeeting||(editing?meetings.find(m=>m.id===editing):null)
   const attMembers=currentMeeting?(currentMeeting.is_general?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===currentMeeting.cell_id&&(m.status==="Membro"||m.status==="Visitante"))):[]
   const presentCount=Object.values(marks).filter(v=>v==="Presente").length
@@ -1632,8 +1636,11 @@ function MeetingsPanel({session,showToast}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <Btn variant="ghost" onClick={()=>setDeleteMeetingId(null)}>Cancelar</Btn>
           <Btn variant="danger" onClick={async()=>{
-            await supabase.from("attendance").delete().eq("date",(meetings.find(m=>m.id===deleteMeetingId)||{}).date).eq("cell_id",(meetings.find(m=>m.id===deleteMeetingId)||{}).cell_id)
+            const m=meetings.find(x=>x.id===deleteMeetingId)||{}
+            const cellName=cells.find(c=>c.id===m.cell_id)?.name||"Celulão"
+            await supabase.from("attendance").delete().eq("date",m.date).eq("cell_id",m.cell_id)
             await supabase.from("meetings").delete().eq("id",deleteMeetingId)
+            await addLog(session,"delete",`Encontro excluído: ${cellName} — ${m.date}`)
             showToast("Encontro excluído")
             setDeleteMeetingId(null)
           }}>Excluir</Btn>
@@ -2564,18 +2571,29 @@ function AllRequestsPanel({session,showToast}){
 
 function LogsPanel(){
   const{data:logs,loading}=useTable("logs")
+  const{data:users}=useTable("users")
   const emoji={create:"➕",update:"✏️",delete:"🗑️"}
   return(
     <div>
       <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",marginBottom:16}}>Auditoria</h2>
       {loading&&<Loader/>}
       {!loading&&logs.length===0&&<Card><p style={{color:"#94a3b8",textAlign:"center",margin:0}}>Nenhum registro</p></Card>}
-      {logs.map(log=>(
-        <div key={log.id} style={{background:"#fff",borderRadius:12,padding:"10px 14px",marginBottom:6,border:"1px solid #e8edf2",display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:16}}>{emoji[log.action]||"📝"}</span>
-          <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:"#334155"}}>{log.detail}</div><div style={{fontSize:11,color:"#94a3b8"}}>{new Date(log.created_at).toLocaleString("pt-BR")}</div></div>
-        </div>
-      ))}
+      {logs.map(log=>{
+        const user=users.find(u=>u.id===log.user_id)
+        const userName=user?.name||"Usuário desconhecido"
+        return(
+          <div key={log.id} style={{background:"#fff",borderRadius:12,padding:"10px 14px",marginBottom:6,border:"1px solid #e8edf2",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:16}}>{emoji[log.action]||"📝"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#334155"}}>{log.detail}</div>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginTop:2,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                <span style={{fontSize:11,fontWeight:700,color:C.primary,background:C.primary+"10",padding:"1px 7px",borderRadius:6}}>👤 {userName}</span>
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
