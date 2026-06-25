@@ -714,6 +714,56 @@ function AdminOverview({session,showToast,setTab}){
   const nextMeetings=activeCells.filter(c=>c.next_meeting_date).sort((a,b)=>a.next_meeting_date.localeCompare(b.next_meeting_date)).slice(0,4)
   const monthNames=["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
 
+  // ── CRESCIMENTO: novos membros por mês (últimos 6 meses) ──
+  const growthData=(()=>{
+    const months=[]
+    const now=new Date()
+    for(let i=5;i>=0;i--){
+      const d=new Date(now.getFullYear(),now.getMonth()-i,1)
+      const y=d.getFullYear(),m=d.getMonth()
+      const count=members.filter(mb=>{
+        if(!mb.created_at)return false
+        const cd=new Date(mb.created_at)
+        return cd.getFullYear()===y&&cd.getMonth()===m&&mb.status!=="Inativo"
+      }).length
+      months.push({label:monthNames[m+1],count})
+    }
+    return months
+  })()
+
+  // ── FREQUÊNCIA SEMANAL: últimas 8 semanas ──
+  const freqWeekData=(()=>{
+    const weeks=[]
+    const now=new Date()
+    for(let i=7;i>=0;i--){
+      const sun=new Date(now)
+      sun.setDate(now.getDate()-now.getDay()-i*7)
+      sun.setHours(0,0,0,0)
+      const sat=new Date(sun)
+      sat.setDate(sun.getDate()+6)
+      sat.setHours(23,59,59,999)
+      const wAtt=attendance.filter(a=>{const d=new Date(a.date);return d>=sun&&d<=sat})
+      const pct=wAtt.length>0?Math.round(wAtt.filter(a=>a.status==="Presente").length/wAtt.length*100):null
+      const label=`${String(sun.getDate()).padStart(2,"0")}/${String(sun.getMonth()+1).padStart(2,"0")}`
+      weeks.push({label,pct})
+    }
+    return weeks
+  })()
+
+  // ── ALERTA DE FALTAS: membros com 2+ encontros seguidos ausentes ──
+  const absentAlerts=(()=>{
+    const alerts=[]
+    const activeMembersList=members.filter(m=>m.status==="Membro")
+    activeMembersList.forEach(m=>{
+      const mAtt=attendance.filter(a=>a.member_id===m.id).sort((a,b)=>b.date.localeCompare(a.date))
+      if(mAtt.length>=2&&mAtt[0].status==="Ausente"&&mAtt[1].status==="Ausente"){
+        const cell=cells.find(c=>c.id===m.cell_id)
+        alerts.push({...m,cellName:cell?.name||"Sem célula",missedCount:mAtt.filter((a,i)=>i<mAtt.length&&a.status==="Ausente"&&(i===0||mAtt[i-1].status==="Ausente")).length})
+      }
+    })
+    return alerts.slice(0,10)
+  })()
+
   return(
     <div style={{animation:"fadeIn 0.2s ease"}}>
 
@@ -834,6 +884,87 @@ function AdminOverview({session,showToast,setTab}){
           </table>
         </div>
       </Card>
+
+      {/* ALERTA DE FALTAS */}
+      {absentAlerts.length>0&&(
+        <Card style={{marginBottom:14,border:`1px solid ${C.danger}30`,background:"#fff5f5"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <div style={{background:C.danger+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="bell" size={15} color={C.danger}/></div>
+            <span style={{fontSize:13,fontWeight:800,color:C.danger}}>⚠️ Precisam de atenção — 2+ faltas seguidas</span>
+            <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,background:C.danger,color:"#fff",borderRadius:20,padding:"2px 10px"}}>{absentAlerts.length}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {absentAlerts.map(m=>(
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,background:"#fff",borderRadius:10,padding:"8px 12px",border:"1px solid #fecaca"}}>
+                <Avatar name={m.name} photo={m.photo_url} size={30} color={C.danger}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</div>
+                  <div style={{fontSize:11,color:"#94a3b8"}}>{m.cellName}</div>
+                </div>
+                {m.phone&&<a href={whatsappLink(m.phone)} target="_blank" rel="noopener noreferrer" style={{background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:8,padding:"4px 8px",display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:"#166534",textDecoration:"none",flexShrink:0}}><Icon name="whatsapp" size={11}/>Contatar</a>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* GRÁFICOS */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+
+        {/* CRESCIMENTO MENSAL */}
+        <Card>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+            <div style={{background:C.primary+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="user-plus" size={15} color={C.primary}/></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>Novos Membros (6 meses)</span>
+          </div>
+          {(()=>{
+            const maxVal=Math.max(...growthData.map(d=>d.count),1)
+            const h=120
+            return(
+              <div style={{display:"flex",alignItems:"flex-end",gap:6,height:h+32}}>
+                {growthData.map((d,i)=>{
+                  const barH=d.count>0?Math.max(Math.round(d.count/maxVal*h),6):3
+                  return(
+                    <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10,fontWeight:800,color:C.primary,opacity:d.count>0?1:0}}>{d.count}</span>
+                      <div style={{width:"100%",height:barH,background:i===growthData.length-1?C.primary:C.primary+"60",borderRadius:"4px 4px 0 0",transition:"height 0.4s"}}/>
+                      <span style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>{d.label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </Card>
+
+        {/* FREQUÊNCIA SEMANAL */}
+        <Card>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+            <div style={{background:C.success+"15",borderRadius:8,padding:6,display:"flex"}}><Icon name="bar-chart" size={15} color={C.success}/></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#0f172a"}}>Frequência Semanal (%)</span>
+          </div>
+          {(()=>{
+            const vals=freqWeekData.map(d=>d.pct??0)
+            const maxVal=Math.max(...vals,1)
+            const h=120
+            return(
+              <div style={{display:"flex",alignItems:"flex-end",gap:4,height:h+32}}>
+                {freqWeekData.map((d,i)=>{
+                  const barH=d.pct!==null?Math.max(Math.round(d.pct/100*h),4):3
+                  const color=d.pct===null?"#e2e8f0":d.pct>=75?C.success:d.pct>=50?C.warning:C.danger
+                  return(
+                    <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:9,fontWeight:800,color,opacity:d.pct!==null?1:0}}>{d.pct}%</span>
+                      <div style={{width:"100%",height:barH,background:color,borderRadius:"4px 4px 0 0",transition:"height 0.4s"}}/>
+                      <span style={{fontSize:9,color:"#94a3b8",fontWeight:600,transform:"rotate(-30deg)",transformOrigin:"top center",marginTop:4,whiteSpace:"nowrap"}}>{d.label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </Card>
+      </div>
 
       {/* BOTTOM ROW */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
