@@ -1650,15 +1650,25 @@ function MeetingsPanel({session,showToast}){
     const cellId=meeting.cell_id
     const isGeneral=meeting.is_general
     const targetMembers=isGeneral?members.filter(m=>m.status==="Membro"||m.status==="Visitante"):members.filter(m=>m.cell_id===cellId&&(m.status==="Membro"||m.status==="Visitante"))
-    const{data:existing}=await supabase.from("attendance").select("member_id").eq("date",meeting.date).eq("cell_id",cellId||"")
-    const existingIds=new Set((existing||[]).map(e=>e.member_id))
-    const records=targetMembers.filter(m=>!existingIds.has(m.id)).map(m=>({member_id:m.id,member_name:m.name,cell_id:cellId,date:meeting.date,theme:meeting.theme,preacher:meeting.preacher,songs:meeting.songs,photos_link:meeting.photos_link,status:marks[m.id]||"Ausente",recorded_by:session.id}))
-    if(records.length>0){
-      await supabase.from("attendance").insert(records)
-      showToast("Presença salva! ✓")
-    }else{
-      showToast("Presença já registrada!","warning")
+    const{data:existing}=await supabase.from("attendance").select("id,member_id,status").eq("date",meeting.date).eq("cell_id",cellId||"")
+    const existingMap={}
+    ;(existing||[]).forEach(e=>{existingMap[e.member_id]={id:e.id,status:e.status}})
+    const toInsert=[]
+    const toUpdate=[]
+    for(const m of targetMembers){
+      const prev=existingMap[m.id]
+      const st=marks[m.id]||(prev?.status)||"Ausente"
+      if(prev){
+        if(marks[m.id]&&marks[m.id]!==prev.status) toUpdate.push({id:prev.id,status:st})
+      }else{
+        toInsert.push({member_id:m.id,member_name:m.name,cell_id:cellId,date:meeting.date,theme:meeting.theme,preacher:meeting.preacher,songs:meeting.songs,photos_link:meeting.photos_link,status:st,recorded_by:session.id})
+      }
     }
+    await Promise.all([
+      toInsert.length>0?supabase.from("attendance").insert(toInsert):Promise.resolve(),
+      ...toUpdate.map(u=>supabase.from("attendance").update({status:u.status}).eq("id",u.id))
+    ])
+    showToast("Presença salva! ✓")
     setStep(null);setMarks({});setSavedMeeting(null)
   }
 
