@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "./supabase.js"
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
@@ -2186,21 +2186,26 @@ function EventsPanel({session,showToast}){
 
 
 // ─── SONGS PANEL ──────────────────────────────────────────────────────────────
+const SONG_CATS=['Adoração','Louvor','Comunhão','Ceia','Ao Ar Livre','Casamento','Aniversário','Missões','Infantil','Outro']
+const SONG_TONS=['','A','A#/Bb','B','C','C#/Db','D','D#/Eb','E','F','F#/Gb','G','G#/Ab']
+const SONG_EMPTY={title:"",artist:"",tom:"",tomIg:"",cf:"",yt:"",cats:[],lyrics:"",obs:""}
+
 function SongsPanel({session,showToast}){
-  const{data:songs,loading,reload}=useTable("songs")
+  const{data:songs,loading}=useTable("songs")
   const[modal,setModal]=useState(false)
   const[editing,setEditing]=useState(null)
   const[deleteId,setDeleteId]=useState(null)
-  const[lyricsModal,setLyricsModal]=useState(null)
+  const[aberta,setAberta]=useState(null)
   const[search,setSearch]=useState("")
   const[filterTab,setFilterTab]=useState("approved")
-  const emptyForm={title:"",artist:"",link:"",lyrics:""}
-  const[form,setForm]=useState(emptyForm)
-  const f=k=>v=>setForm(p=>({...p,[k]:v}))
+  const[form,setForm]=useState(SONG_EMPTY)
+  const[sugestoes,setSugestoes]=useState([])
+  const[buscando,setBuscando]=useState(false)
+  const timerRef=useRef(null)
 
   const isAdmin=session?.role==="admin"||session?.role==="supervisor"
   const isLeader=session?.role==="leader"
-  const canDelete=isAdmin||isLeader
+  const canEdit=isAdmin||isLeader
   const canApprove=session?.role==="leader"||session?.role==="admin"||session?.role==="supervisor"
 
   const approved=songs.filter(s=>(s.status||"approved")==="approved")
@@ -2211,23 +2216,100 @@ function SongsPanel({session,showToast}){
     (s.artist||"").toLowerCase().includes(search.toLowerCase())
   )
 
+  function buscarItunes(nome){
+    clearTimeout(timerRef.current)
+    setSugestoes([])
+    if(nome.length<3)return
+    timerRef.current=setTimeout(async()=>{
+      setBuscando(true)
+      try{
+        const r=await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(nome)}&entity=song&limit=10&country=br`)
+        const d=await r.json()
+        setSugestoes((d.results||[]).slice(0,8))
+      }catch(e){console.error(e)}
+      setBuscando(false)
+    },600)
+  }
+
+  async function buscarTudo(nome,artista){
+    if(!nome)return
+    setBuscando(true)
+    try{
+      const params=new URLSearchParams({nome,artista:artista||""})
+      const r=await fetch(`/api/buscar-musica?${params}`)
+      const d=await r.json()
+      const updates={}
+      if(d.lyrics)updates.lyrics=d.lyrics
+      if(d.yt)updates.yt=d.yt
+      if(d.cf)updates.cf=d.cf
+      if(Object.keys(updates).length){
+        setForm(f=>({...f,...updates}))
+        const msgs=[]
+        if(d.lyrics)msgs.push("letra")
+        if(d.yt)msgs.push("YouTube")
+        if(d.cf)msgs.push("cifra")
+        showToast(`Carregado automaticamente: ${msgs.join(" + ")}!`)
+      }else{
+        showToast("Letra não encontrada. Cole manualmente.","error")
+      }
+    }catch{showToast("Erro ao buscar.","error")}
+    setBuscando(false)
+  }
+
+  function selSugestao(x){
+    const nome=x.trackName||""
+    const artista=x.artistName||""
+    setForm(f=>({...f,title:nome,artist:artista}))
+    setSugestoes([])
+    buscarTudo(nome,artista)
+  }
+
+  function toggleCat(cat){
+    setForm(f=>({...f,cats:f.cats.includes(cat)?f.cats.filter(c=>c!==cat):[...f.cats,cat]}))
+  }
+
   function openEdit(s){
-    setForm({title:s.title,artist:s.artist||"",link:s.link||"",lyrics:s.lyrics||""})
-    setEditing(s.id);setModal(true)
+    setForm({
+      title:s.title||"",
+      artist:s.artist||"",
+      tom:s.tom||"",
+      tomIg:s.tom_ig||"",
+      cf:s.cifra||s.cf||"",
+      yt:s.yt||"",
+      cats:Array.isArray(s.cat)?s.cat:(s.cat?JSON.parse(s.cat||"[]"):[]),
+      lyrics:s.lyrics||"",
+      obs:s.obs||""
+    })
+    setEditing(s.id);setSugestoes([]);setModal(true)
+  }
+
+  function openNew(){
+    setForm(SONG_EMPTY);setEditing(null);setSugestoes([]);setModal(true)
   }
 
   async function save(){
     if(!form.title.trim()){showToast("Nome da música obrigatório","error");return}
+    const row={
+      title:form.title.trim(),
+      artist:form.artist.trim(),
+      tom:form.tom,
+      tom_ig:form.tomIg,
+      cifra:form.cf.trim(),
+      yt:form.yt.trim(),
+      cat:JSON.stringify(form.cats),
+      lyrics:form.lyrics.trim(),
+      obs:form.obs.trim()
+    }
     if(editing){
-      await supabase.from("songs").update({title:form.title.trim(),artist:form.artist.trim(),link:form.link.trim(),lyrics:form.lyrics.trim()}).eq("id",editing)
+      await supabase.from("songs").update(row).eq("id",editing)
       showToast("Música atualizada! 🎵")
     }else{
       const exists=approved.find(s=>s.title.trim().toLowerCase()===form.title.trim().toLowerCase())
       if(exists){showToast(`"${exists.title}" já está cadastrada!`,"error");return}
-      await supabase.from("songs").insert({title:form.title.trim(),artist:form.artist.trim(),link:form.link.trim(),lyrics:form.lyrics.trim(),status:"approved",created_by:session.id,created_by_name:session.name})
+      await supabase.from("songs").insert({...row,status:"approved",created_by:session.id,created_by_name:session.name})
       showToast("Música cadastrada! 🎵")
     }
-    setModal(false);setEditing(null);setForm(emptyForm)
+    setModal(false);setEditing(null);setForm(SONG_EMPTY);setSugestoes([])
   }
 
   async function approve(id){
@@ -2245,14 +2327,18 @@ function SongsPanel({session,showToast}){
     showToast("Música removida");setDeleteId(null)
   }
 
+  function getCats(s){
+    try{return Array.isArray(s.cat)?s.cat:(s.cat?JSON.parse(s.cat):[])}catch{return[]}
+  }
+
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
         <div>
           <h2 style={{fontSize:18,fontWeight:800,color:"#0f172a",margin:"0 0 2px"}}>Repertório 🎵</h2>
-          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{approved.length} música(s) aprovada(s){pending.length>0?` • ${pending.length} sugestão(ões) pendente(s)`:""}</p>
+          <p style={{fontSize:12,color:"#94a3b8",margin:0}}>{approved.length} música(s){pending.length>0?` • ${pending.length} pendente(s)`:""}</p>
         </div>
-        <Btn icon="plus" size="sm" onClick={()=>{setForm(emptyForm);setEditing(null);setModal(true)}}>Nova</Btn>
+        <Btn icon="plus" size="sm" onClick={openNew}>Nova</Btn>
       </div>
 
       <div style={{display:"flex",gap:4,marginBottom:12,background:"#f1f5f9",borderRadius:12,padding:4}}>
@@ -2278,50 +2364,131 @@ function SongsPanel({session,showToast}){
         </div>
       )}
 
-      <div style={{background:"#fff",borderRadius:16,border:"1px solid #e8edf2",overflow:"hidden",boxShadow:"0 1px 6px rgba(0,0,0,0.05)"}}>
-        {filtered.map((s,i)=>(
-          <div key={s.id} style={{padding:"12px 14px",borderTop:i>0?"1px solid #f1f5f9":"none"}}>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:40,height:40,borderRadius:12,background:C.primary+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:C.primary}}>
-                <Icon name="music" size={18}/>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map(s=>{
+          const cats=getCats(s)
+          const isOpen=aberta===s.id
+          return(
+            <div key={s.id} style={{background:"#fff",border:"1px solid #e8edf2",borderRadius:isOpen?"12px 12px 0 0":12,boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
+              <div onClick={()=>setAberta(isOpen?null:s.id)} style={{padding:"12px 14px",cursor:"pointer"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{s.title}</div>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:3}}>
+                      <span style={{fontSize:11,color:"#94a3b8"}}>{s.artist||"—"}</span>
+                      {s.tom_ig&&<span style={{fontSize:11,color:C.primary,fontWeight:700}}>Tom: {s.tom_ig}</span>}
+                      {cats.map(c=><span key={c} style={{fontSize:10,background:C.primary+"15",color:C.primary,borderRadius:6,padding:"1px 6px",fontWeight:600}}>{c}</span>)}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                    {s.yt&&<a href={s.yt} target="_blank" rel="noopener noreferrer" style={{background:"#fee2e2",borderRadius:8,padding:"5px 8px",color:"#dc2626",textDecoration:"none",fontSize:12,fontWeight:700}}>▶</a>}
+                    {(s.cifra||s.cf)&&<a href={s.cifra||s.cf} target="_blank" rel="noopener noreferrer" style={{background:"#fef3c7",borderRadius:8,padding:"5px 8px",color:"#d97706",textDecoration:"none",fontSize:12}}>🎸</a>}
+                    {canEdit&&filterTab==="approved"&&<button onClick={()=>openEdit(s)} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.primary,display:"flex"}}><Icon name="edit" size={14}/></button>}
+                    {canEdit&&filterTab==="approved"&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger,display:"flex"}}><Icon name="trash" size={14}/></button>}
+                  </div>
+                </div>
               </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
-                <div style={{fontSize:11,color:"#94a3b8"}}>{s.artist||"—"} • por {s.created_by_name?.split(" ")[0]||"—"}</div>
-              </div>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                {s.lyrics&&<button onClick={()=>setLyricsModal(s)} style={{background:C.gold+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.gold,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}><Icon name="music" size={13}/>Letra</button>}
-                {s.link&&<a href={s.link} target="_blank" rel="noopener noreferrer" style={{background:C.primary+"15",borderRadius:8,padding:7,display:"flex",color:C.primary,textDecoration:"none"}}><Icon name="link" size={14}/></a>}
-                {filterTab==="approved"&&<button onClick={()=>openEdit(s)} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.primary,display:"flex"}}><Icon name="edit" size={14}/></button>}
-                {canDelete&&filterTab==="approved"&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger,display:"flex"}}><Icon name="trash" size={14}/></button>}
-              </div>
+              {isOpen&&(
+                <div style={{background:"#f8fafc",borderTop:"1px solid #e8edf2",borderRadius:"0 0 12px 12px",padding:"12px 14px"}}>
+                  {s.lyrics
+                    ?<pre style={{fontSize:12,lineHeight:1.9,color:"#334155",whiteSpace:"pre-wrap",maxHeight:260,overflowY:"auto",fontFamily:"inherit",margin:0}}>{s.lyrics}</pre>
+                    :<div style={{color:"#94a3b8",fontSize:12}}>Sem letra cadastrada.</div>
+                  }
+                  {s.obs&&<div style={{fontSize:11,color:"#94a3b8",marginTop:6,fontStyle:"italic"}}>{s.obs}</div>}
+                </div>
+              )}
+              {filterTab==="pending"&&canApprove&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"0 14px 12px"}}>
+                  <Btn variant="success" size="sm" onClick={()=>approve(s.id)}>✓ Aprovar</Btn>
+                  <Btn variant="danger" size="sm" onClick={()=>reject(s.id)}>✗ Rejeitar</Btn>
+                </div>
+              )}
             </div>
-            {filterTab==="pending"&&canApprove&&(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
-                <Btn variant="success" size="sm" onClick={()=>approve(s.id)}>✓ Aprovar</Btn>
-                <Btn variant="danger" size="sm" onClick={()=>reject(s.id)}>✗ Rejeitar</Btn>
+          )
+        })}
+      </div>
+
+      {modal&&(
+        <Modal open={modal} onClose={()=>{setModal(false);setEditing(null);setForm(SONG_EMPTY);setSugestoes([])}} title={editing?"Editar Música":"Nova Música"}>
+          <div style={{position:"relative",marginBottom:14}}>
+            <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>
+              Nome da Música * {buscando&&<span style={{color:C.primary,fontWeight:400,textTransform:"none",letterSpacing:0}}> 🔍 buscando...</span>}
+            </label>
+            <input
+              value={form.title}
+              onChange={e=>{setForm(f=>({...f,title:e.target.value}));buscarItunes(e.target.value)}}
+              placeholder="Digite para buscar automaticamente..."
+              style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none",background:"#fff",boxSizing:"border-box"}}
+            />
+            {sugestoes.length>0&&(
+              <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid "+C.primary,borderRadius:"0 0 10px 10px",zIndex:200,maxHeight:200,overflowY:"auto",boxShadow:"0 4px 12px rgba(0,0,0,0.1)"}}>
+                {sugestoes.map((x,i)=>(
+                  <div key={i} onClick={()=>selSugestao(x)} style={{padding:"9px 12px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #f1f5f9",color:"#334155"}} onMouseOver={e=>e.currentTarget.style.background="#f8fafc"} onMouseOut={e=>e.currentTarget.style.background=""}>
+                    {x.trackName} <span style={{color:"#94a3b8"}}>— {x.artistName}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        ))}
-      </div>
 
-      <Modal open={modal} onClose={()=>{setModal(false);setEditing(null);setForm(emptyForm)}} title={editing?"Editar Música":"Nova Música"}>
-        <Inp label="Nome da Música *" value={form.title} onChange={f("title")} required placeholder="Ex: Não Desista de Você"/>
-        <Inp label="Artista / Ministério" value={form.artist} onChange={f("artist")} placeholder="Ex: Ministério Zoe"/>
-        <Inp label="Link (YouTube, Spotify...)" value={form.link} onChange={f("link")} placeholder="https://..."/>
-        <Textarea label="Letra da Música (opcional)" value={form.lyrics} onChange={f("lyrics")} placeholder="Cole aqui a letra completa..." rows={6}/>
-        {!editing&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#92400e",fontWeight:500}}>⚠️ O sistema não permite músicas duplicadas.</div>}
-        <Btn full onClick={save} icon="music">{editing?"Salvar Alterações":"Cadastrar Música"}</Btn>
-      </Modal>
+          <Inp label="Artista / Ministério" value={form.artist} onChange={v=>setForm(f=>({...f,artist:v}))} placeholder="Ex: Ministério Zoe"/>
 
-      {lyricsModal&&(
-        <Modal open title={`🎵 ${lyricsModal.title}`} onClose={()=>setLyricsModal(null)}>
-          {lyricsModal.artist&&<p style={{fontSize:13,color:"#94a3b8",fontWeight:600,marginBottom:16}}>{lyricsModal.artist}</p>}
-          <div style={{background:"#f8fafc",borderRadius:14,padding:"16px 18px",border:"1px solid #e8edf2",maxHeight:400,overflowY:"auto"}}>
-            <pre style={{fontSize:14,color:"#334155",lineHeight:1.9,fontFamily:"'Outfit',sans-serif",whiteSpace:"pre-wrap",margin:0}}>{lyricsModal.lyrics}</pre>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            <div>
+              <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Tom Original</label>
+              <select value={form.tom} onChange={e=>setForm(f=>({...f,tom:e.target.value}))} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none",background:"#fff"}}>
+                {SONG_TONS.map(t=><option key={t} value={t}>{t||"—"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Tom na Igreja</label>
+              <select value={form.tomIg} onChange={e=>setForm(f=>({...f,tomIg:e.target.value}))} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none",background:"#fff"}}>
+                {SONG_TONS.map(t=><option key={t} value={t}>{t||"—"}</option>)}
+              </select>
+            </div>
           </div>
-          {lyricsModal.link&&<a href={lyricsModal.link} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.primary,borderRadius:12,padding:"11px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,marginTop:14}}><Icon name="link" size={15}/>Ouvir música</a>}
+
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Link Cifra Club</label>
+            <input type="url" value={form.cf} onChange={e=>setForm(f=>({...f,cf:e.target.value}))} placeholder="Preenchido automaticamente ou cole o link..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+          </div>
+
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Link YouTube</label>
+            <input type="url" value={form.yt} onChange={e=>setForm(f=>({...f,yt:e.target.value}))} placeholder="Preenchido automaticamente ou cole o link..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:14,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+          </div>
+
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Categorias</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+              {SONG_CATS.map(cat=>{
+                const sel=form.cats.includes(cat)
+                return(
+                  <label key={cat} onClick={()=>toggleCat(cat)} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:sel?C.primary+"15":"#f8fafc",border:`1px solid ${sel?C.primary:"#e2e8f0"}`,borderRadius:8,cursor:"pointer",userSelect:"none"}}>
+                    <div style={{width:16,height:16,flexShrink:0,borderRadius:4,border:`2px solid ${sel?C.primary:"#94a3b8"}`,background:sel?C.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      {sel&&<span style={{color:"#fff",fontSize:11,fontWeight:900,lineHeight:1}}>✓</span>}
+                    </div>
+                    <span style={{fontSize:12,color:sel?C.primary:"#334155",fontWeight:sel?600:400}}>{cat}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:12,fontWeight:700,color:"#64748b",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>
+              <span>Letra</span>
+              {form.title&&(
+                <button type="button" onClick={()=>buscarTudo(form.title,form.artist)} disabled={buscando} style={{fontSize:11,color:C.primary,background:"none",border:"none",cursor:buscando?"not-allowed":"pointer",fontWeight:600,fontFamily:"inherit",opacity:buscando?.6:1,textTransform:"none",letterSpacing:0}}>
+                  {buscando?"🔍 Buscando...":"✨ Buscar letra + YouTube + Cifra automaticamente"}
+                </button>
+              )}
+            </label>
+            <textarea value={form.lyrics} onChange={e=>setForm(f=>({...f,lyrics:e.target.value}))} placeholder="Clique em 'Buscar automaticamente' ou cole aqui..." rows={6} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontSize:13,outline:"none",background:"#fff",resize:"vertical",boxSizing:"border-box",fontFamily:"inherit",lineHeight:1.7}}/>
+          </div>
+
+          <Inp label="Observações" value={form.obs} onChange={v=>setForm(f=>({...f,obs:v}))} placeholder="Notas sobre a música..."/>
+          <Btn full onClick={save} icon="music">{editing?"Salvar Alterações":"Cadastrar Música"}</Btn>
         </Modal>
       )}
 
