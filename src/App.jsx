@@ -1897,7 +1897,11 @@ function CellsPanel({session,showToast}){
       showToast("Célula criada!")
     }
     if(cellId){
-      // nunca rebaixa admin/supervisor: só promove quem é member/leader/secretary
+      // 1) tira o papel de TODOS os líderes/secretários atuais desta célula.
+      //    Assim, quem foi removido da lista é rebaixado sozinho — sem ação manual.
+      //    Só mexe em quem é leader/secretary (nunca em admin/supervisor).
+      await supabase.from("users").update({role:"member"}).eq("cell_id",cellId).in("role",["leader","secretary"])
+      // 2) coloca os designados agora. (member->leader/secretary; nunca rebaixa gestor)
       const PROMOVIVEIS=["member","leader","secretary"]
       for(const id of form.leaders_ids)await supabase.from("users").update({role:"leader",cell_id:cellId}).eq("member_id",id).in("role",PROMOVIVEIS)
       for(const id of form.secretaries_ids)await supabase.from("users").update({role:"secretary",cell_id:cellId}).eq("member_id",id).in("role",PROMOVIVEIS)
