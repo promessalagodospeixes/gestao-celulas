@@ -2649,7 +2649,14 @@ function EscolhaLouvorPage({pollId}){
 function SelecaoLouvorModal({meeting,cells,members,songs,session,showToast,onClose}){
   const[escolhidas,setEscolhidas]=useState([])
   const[quantas,setQuantas]=useState(2)
-  const[paraQuem,setParaQuem]=useState(null)
+  // Já vem preenchido com o responsável pelo louvor que foi definido na criação do
+  // encontro (achado no cadastro pelo nome). Você pode trocar se quiser.
+  const[paraQuem,setParaQuem]=useState(()=>{
+    const norm=s=>(s||"").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim()
+    const nomes=lerLista(meeting.louvor).map(x=>(x||"").trim()).filter(Boolean)
+    for(const n of nomes){const m=members.find(x=>norm(x.name)===norm(n));if(m)return m}
+    return null
+  })
   const[buscando,setBuscando]=useState(false)
   const[busca,setBusca]=useState("")
   const[enviando,setEnviando]=useState(false)
