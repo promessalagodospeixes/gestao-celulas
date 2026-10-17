@@ -1,5 +1,8 @@
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  // CORS restrito: só a própria aplicação (e previews/local), nunca qualquer origem.
+  const ALLOW = [/^https:\/\/celula\.promessalagodospeixes\.com\.br$/, /\.vercel\.app$/, /^http:\/\/localhost(:\d+)?$/]
+  const origin = req.headers.origin || ''
+  if (ALLOW.some(re => re.test(origin))) res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Access-Control-Allow-Methods', 'GET')
 
   const { artista = '', nome = '', busca, genius_q } = req.query

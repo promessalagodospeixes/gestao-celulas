@@ -416,6 +416,7 @@ export default function App(){
   const[toast,setToast]=useState({msg:"",type:"success"})
   const[showLGPD,setShowLGPD]=useState(false)
   const[pendingSession,setPendingSession]=useState(null)
+  const[mustChange,setMustChange]=useState(false)
   const[loading,setLoading]=useState(true)
 
   // Restore session from localStorage on load
@@ -429,6 +430,8 @@ export default function App(){
           setSession(user)
           const map={admin:"admin",supervisor:"supervisor",leader:"leader",secretary:"secretary",member:"member"}
           setPage(map[user.role]||"member")
+          // já logado: se precisa trocar a senha, força a troca antes de usar o app
+          supabase.rpc("preciso_trocar").then(({data})=>{if(data===true)setMustChange(true)}).catch(()=>{})
         }
       }else if(saved&&!temCracha){
         // sessão antiga sem crachá (versão anterior do login) — pede login de novo
@@ -443,8 +446,19 @@ export default function App(){
 
   async function doLogin(user){
     if(user.active===false)return
+    // senha padrão / definida pelo gestor: obriga a trocar antes de entrar
+    if(user.must_change_pwd){setPendingSession(user);setMustChange(true);return}
     if(!user.lgpd_accepted){setPendingSession(user);setShowLGPD(true);return}
     startSession(user)
+  }
+
+  function handleTrocaDone(){
+    setMustChange(false)
+    const u=pendingSession
+    if(u&&!session){ // veio do login: continua o fluxo (LGPD, depois entra)
+      if(!u.lgpd_accepted){setShowLGPD(true)}
+      else{startSession(u);setPendingSession(null)}
+    }
   }
 
   async function handleLGPDAccept(){
@@ -516,7 +530,8 @@ export default function App(){
       `}</style>
       <Toast msg={toast.msg} type={toast.type}/>
       {showLGPD&&<LGPDModal onAccept={handleLGPDAccept}/>}
-      {pollLouvor?<EscolhaLouvorPage pollId={pollLouvor}/>:<>
+      {pollLouvor?<EscolhaLouvorPage pollId={pollLouvor}/>:
+       mustChange?<TrocaSenhaObrigatoria showToast={showToast} onDone={handleTrocaDone}/>:<>
       {page==="login"&&<LoginPage onLogin={doLogin} showToast={showToast}/>}
       {session&&page!=="login"&&<AppShell session={session} logout={doLogout} showToast={showToast}/>}
       </>}
@@ -525,6 +540,41 @@ export default function App(){
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
+function TrocaSenhaObrigatoria({showToast,onDone}){
+  const[nova,setNova]=useState("")
+  const[conf,setConf]=useState("")
+  const[ver,setVer]=useState(false)
+  const[saving,setSaving]=useState(false)
+  async function salvar(){
+    if(nova.length<6){showToast("A nova senha precisa de ao menos 6 caracteres","error");return}
+    if(/^\d+$/.test(nova)&&nova.length<=6){showToast("Evite senha só de números. Misture letras.","error");return}
+    if(nova==="123456"){showToast("Escolha uma senha diferente de 123456","error");return}
+    if(nova!==conf){showToast("As senhas não conferem","error");return}
+    setSaving(true)
+    const{data,error}=await supabase.rpc("definir_senha_nova",{nova})
+    setSaving(false)
+    if(error||(data&&data.erro)){showToast(data?.erro||"Não consegui salvar a senha. Tente de novo.","error");return}
+    showToast("Senha atualizada! ✓")
+    onDone()
+  }
+  const inp={width:"100%",background:"rgba(255,255,255,.09)",border:"1.5px solid rgba(255,255,255,.14)",borderRadius:13,padding:"13px 16px",fontSize:16,color:"#fff",outline:"none",boxSizing:"border-box",marginBottom:12}
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(165deg,#0F1B2D 0%,#1B4F8A 55%,#2F6FBF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{width:"100%",maxWidth:400}}>
+        <div style={{textAlign:"center",marginBottom:20}}><LogoIcon size={48}/></div>
+        <div style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.14)",borderRadius:18,padding:24}}>
+          <h1 style={{color:"#fff",fontSize:20,fontWeight:800,margin:"0 0 6px",textAlign:"center"}}>Crie uma nova senha</h1>
+          <p style={{color:"rgba(255,255,255,.75)",fontSize:13.5,lineHeight:1.6,margin:"0 0 18px",textAlign:"center"}}>Por segurança, a senha padrão não pode mais ser usada. Defina uma senha só sua para continuar.</p>
+          <input type={ver?"text":"password"} value={nova} onChange={e=>setNova(e.target.value)} placeholder="Nova senha (mín. 6)" style={inp} autoFocus/>
+          <input type={ver?"text":"password"} value={conf} onChange={e=>setConf(e.target.value)} placeholder="Repita a nova senha" style={inp} onKeyDown={e=>{if(e.key==="Enter")salvar()}}/>
+          <label style={{display:"flex",alignItems:"center",gap:8,color:"rgba(255,255,255,.7)",fontSize:12.5,marginBottom:16,cursor:"pointer"}}><input type="checkbox" checked={ver} onChange={e=>setVer(e.target.checked)}/>Mostrar senha</label>
+          <button onClick={salvar} disabled={saving} style={{width:"100%",background:saving?"rgba(255,255,255,.3)":"#fff",color:"#1B4F8A",border:"none",borderRadius:13,padding:"14px",fontSize:15,fontWeight:800,cursor:saving?"wait":"pointer"}}>{saving?"Salvando...":"Salvar e entrar"}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LoginPage({onLogin,showToast}){
   const[login,setLogin]=useState("")
   const[pw,setPw]=useState("")
@@ -798,7 +848,7 @@ function FamiliaField({memberId,members,session,showToast}){
     const{error}=await supabase.from("family_links").insert({member_id:memberId,relative_id:escolhido.id,tipo,created_by:session?.id||null})
     setSalvando(false)
     if(error){
-      showToast(error.code==="23505"?"Esse vínculo já existe":"Erro ao vincular: "+error.message,"error")
+      showToast(error.code==="23505"?"Esse vínculo já existe":"Não consegui vincular. Tente de novo.","error")
       return
     }
     showToast(`${escolhido.name} vinculado(a) como ${rotuloParentesco(tipo,escolhido.gender)}`)
@@ -807,7 +857,7 @@ function FamiliaField({memberId,members,session,showToast}){
 
   async function remover(linkId){
     const{error}=await supabase.from("family_links").delete().eq("id",linkId)
-    if(error){showToast("Erro ao remover: "+error.message,"error");return}
+    if(error){showToast("Não consegui remover. Tente de novo.","error");return}
     showToast("Vínculo removido");reload()
   }
 
@@ -1886,13 +1936,13 @@ function CellsPanel({session,showToast}){
     let cellId=editing
     if(editing){
       const{error}=await supabase.from("cells").update(payload).eq("id",editing)
-      if(error){showToast("Erro: "+error.message,"error");return}
+      if(error){showToast("Não consegui salvar. Tente de novo.","error");return}
       await addLog(session,"update",`Célula atualizada: ${form.name}`)
       showToast("Célula atualizada!")
     }else{
       // captura o ID da célula recém-criada para vincular o líder a ELA (antes ficava sem célula)
       const{data:nova,error}=await supabase.from("cells").insert(payload).select().single()
-      if(error||!nova){showToast("Erro: "+(error?.message||"tente de novo"),"error");return}
+      if(error||!nova){showToast("Não consegui salvar. Tente de novo.","error");return}
       cellId=nova.id
       await addLog(session,"create",`Célula criada: ${form.name}`)
       showToast("Célula criada!")
@@ -1913,7 +1963,7 @@ function CellsPanel({session,showToast}){
     setModal(false);setEditing(null);setForm(emptyForm)
   }
 
-  async function del(){const{error}=await supabase.from("cells").delete().eq("id",deleteId);if(error){showToast("Não consegui remover: "+error.message,"error");return}showToast("Célula removida");setDeleteId(null)}
+  async function del(){const{error}=await supabase.from("cells").delete().eq("id",deleteId);if(error){showToast("Não consegui remover. Tente de novo.","error");return}showToast("Célula removida");setDeleteId(null)}
 
   const filteredCells=cells.filter(c=>{
     const matchType=!filterType||c.cell_type===filterType
@@ -2084,7 +2134,7 @@ function MembersPanel({session,showToast}){
     if(!requestInactReason.trim()){showToast("Informe o motivo","error");return}
     const m=members.find(x=>x.id===requestInactModal)
     const{error}=await supabase.from("inactivation_requests").insert({member_id:m.id,member_name:m.name,cell_id:m.cell_id||null,reason:requestInactReason.trim(),requested_by:session.id,requested_by_name:session.name,status:"pending"})
-    if(error){showToast("Não consegui enviar a solicitação: "+error.message,"error");return}
+    if(error){showToast("Não consegui enviar a solicitação. Tente de novo.","error");return}
     await addLog(session,"create",`Solicitação de inativação enviada: ${m.name}`)
     showToast("Solicitação enviada ao gestor!");setRequestInactModal(null);setRequestInactReason("")
   }
@@ -2093,7 +2143,7 @@ function MembersPanel({session,showToast}){
     if(!requestDeleteReason.trim()){showToast("Informe o motivo","error");return}
     const m=members.find(x=>x.id===requestDeleteModal)
     const{error}=await supabase.from("inactivation_requests").insert({member_id:m.id,member_name:m.name,cell_id:m.cell_id||null,reason:`[EXCLUIR] ${requestDeleteReason.trim()}`,requested_by:session.id,requested_by_name:session.name,status:"pending"})
-    if(error){showToast("Não consegui enviar a solicitação: "+error.message,"error");return}
+    if(error){showToast("Não consegui enviar a solicitação. Tente de novo.","error");return}
     await addLog(session,"create",`Solicitação de exclusão enviada: ${m.name}`)
     showToast("Solicitação de exclusão enviada ao gestor!");setRequestDeleteModal(null);setRequestDeleteReason("")
   }
@@ -2120,7 +2170,7 @@ function MembersPanel({session,showToast}){
     // guarda o status atual para devolver certo na reativacao — antes todo mundo
     // voltava como "Membro", o que promovia visitante sem querer
     const{error}=await supabase.from("members").update({status:"Inativo",status_anterior:m?.status||"Visitante",inactive_reason:inactiveReason.trim(),inactivated_at:new Date().toISOString(),inactivated_by:session.name}).eq("id",inactivateModal)
-    if(error){showToast("Não consegui inativar: "+error.message,"error");return}
+    if(error){showToast("Não consegui inativar. Tente de novo.","error");return}
     await supabase.from("users").update({active:false}).eq("member_id",inactivateModal)
     await addLog(session,"update",`Membro inativado: ${m?.name} — Motivo: ${inactiveReason.trim()}`)
     showToast("Membro inativado");setInactivateModal(null);setInactiveReason("")
@@ -2130,7 +2180,7 @@ function MembersPanel({session,showToast}){
     const m=members.find(x=>x.id===reactivateModal)
     const voltarPara=m?.status_anterior||(m?.cpf?"Membro":"Visitante")
     const{error}=await supabase.from("members").update({status:voltarPara,status_anterior:null,inactive_reason:null,inactivated_at:null,inactivated_by:null}).eq("id",reactivateModal)
-    if(error){showToast("Não consegui reativar: "+error.message,"error");return}
+    if(error){showToast("Não consegui reativar. Tente de novo.","error");return}
     await supabase.from("users").update({active:true}).eq("member_id",reactivateModal)
     await addLog(session,"update",`Membro reativado: ${m?.name}`)
     showToast(`Reativado como ${voltarPara}!`);setReactivateModal(null)
@@ -2164,12 +2214,12 @@ function MembersPanel({session,showToast}){
       if(!error){await supabase.rpc("def_senha_membro",{p_member_id:memberId,p_senha:SENHA_PADRAO});return"criado"}
       // a coluna cpf da tabela users ainda e obrigatoria no banco
       if(error.code==="23502")return"O banco ainda exige CPF para criar acesso. Cadastro salvo, mas sem login."
-      return"Cadastro salvo, mas o acesso falhou: "+error.message
+      return"Cadastro salvo, mas não consegui criar o acesso."
     }
 
     if(editing){
       const{error}=await supabase.from("members").update(payload).eq("id",editing)
-      if(error){showToast("Erro: "+error.message,"error");return}
+      if(error){showToast("Não consegui salvar. Tente de novo.","error");return}
       if(form.spouse_name){const spouse=members.find(m=>m.name===form.spouse_name);if(spouse&&spouse.spouse_name!==form.name)await supabase.from("members").update({spouse_name:form.name}).eq("id",spouse.id)}
       // quem ganhou um contato agora também ganha acesso
       const r=temContato?await criarAcesso(editing):"ja tinha"
@@ -2179,7 +2229,7 @@ function MembersPanel({session,showToast}){
       else showToast(r,"error")
     }else{
       const{data:newM,error}=await supabase.from("members").insert(payload).select().single()
-      if(error){showToast("Erro: "+error.message,"error");return}
+      if(error){showToast("Não consegui salvar. Tente de novo.","error");return}
       if(form.spouse_name){const spouse=members.find(m=>m.name===form.spouse_name);if(spouse)await supabase.from("members").update({spouse_name:form.name}).eq("id",spouse.id)}
       if(newM&&temContato){
         const r=await criarAcesso(newM.id)
@@ -2831,7 +2881,7 @@ function MeetingsPanel({session,showToast}){
       const payload={cell_id:form.is_general?null:form.cell_id||null,date:form.date,hora:form.hora||null,local:form.local||null,theme:form.theme,theme_youth:form.theme_youth,songs:form.songs,photos_link:form.photos_link,is_general:form.is_general,created_by:session.id,preacher:guardarLista(form.preachers),louvor:guardarLista(form.louvor),quebra_gelo:guardarLista(form.quebra_gelo),recepcao:guardarLista(form.recepcao),lanche:guardarLista(form.lanche)}
       if(editing){
         const{error}=await supabase.from("meetings").update(payload).eq("id",editing)
-        if(error){showToast("Erro ao salvar: "+error.message,"error");return}
+        if(error){showToast("Não consegui salvar. Tente de novo.","error");return}
         const cellName=cells.find(c=>c.id===form.cell_id)?.name||"Celulão"
         await addLog(session,"update",`Encontro editado: ${cellName} — ${form.date}`)
         showToast("Encontro atualizado!")
@@ -3424,14 +3474,14 @@ function EventsPanel({session,showToast}){
     if(!form.title||!form.date){showToast("Título e data obrigatórios","error");return}
     const payload={...form,cell_id:form.cell_id||null,created_by:session.id}
     const{error}=editing?await supabase.from("events").update(payload).eq("id",editing):await supabase.from("events").insert(payload)
-    if(error){showToast("Não consegui salvar o evento: "+error.message,"error");return}
+    if(error){showToast("Não consegui salvar o evento. Tente de novo.","error");return}
     showToast(editing?"Evento atualizado!":"Evento criado!")
     setModal(false);setEditing(null);setForm(emptyForm)
   }
 
   async function saveAtt(eventId){
     const records=Object.entries(marks).map(([mid,status])=>({event_id:eventId,member_id:mid,member_name:members.find(m=>m.id===mid)?.name||"",status}))
-    if(records.length>0){const{error}=await supabase.from("event_attendance").insert(records);if(error){showToast("Não consegui salvar a presença: "+error.message,"error");return}}
+    if(records.length>0){const{error}=await supabase.from("event_attendance").insert(records);if(error){showToast("Não consegui salvar a presença. Tente de novo.","error");return}}
     showToast("Presença salva!");setAttModal(null);setMarks({})
   }
 
