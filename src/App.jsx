@@ -143,6 +143,7 @@ function getAgeGroup(age){
   return{label:"Adulto",color:"#1B4F8A",icon:"👤"}
 }
 
+function safeUrl(u){const t=String(u||"").trim();return /^https?:\/\//i.test(t)?t:undefined}
 function whatsappLink(phone,name=""){
   const n=phone?.replace(/\D/g,"");
   if(!n)return null;
@@ -2624,8 +2625,8 @@ function EscolhaLouvorPage({pollId}){
                 <div style={{fontSize:14.5,fontWeight:800,color:"#0f172a"}}>{s.title}</div>
                 <div style={{fontSize:12,color:"#94a3b8",marginBottom:8}}>{s.artist||"—"}</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {(s.yt||s.link)&&<a href={s.yt||s.link} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,fontWeight:700,background:"#fee2e2",color:"#991b1b",padding:"5px 10px",borderRadius:8,textDecoration:"none"}}>▶ Ouvir</a>}
-                  {s.cifra&&<a href={s.cifra} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,fontWeight:700,background:"#fef3c7",color:"#92400e",padding:"5px 10px",borderRadius:8,textDecoration:"none"}}>🎸 Cifra</a>}
+                  {(s.yt||s.link)&&<a href={safeUrl(s.yt||s.link)} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,fontWeight:700,background:"#fee2e2",color:"#991b1b",padding:"5px 10px",borderRadius:8,textDecoration:"none"}}>▶ Ouvir</a>}
+                  {s.cifra&&<a href={safeUrl(s.cifra)} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,fontWeight:700,background:"#fef3c7",color:"#92400e",padding:"5px 10px",borderRadius:8,textDecoration:"none"}}>🎸 Cifra</a>}
                   {s.lyrics&&<button type="button" onClick={()=>setVerLetra(s)} style={{fontSize:11.5,fontWeight:700,background:"#f1f5f9",color:"#475569",padding:"5px 10px",borderRadius:8,border:"none",cursor:"pointer"}}>📖 Letra</button>}
                 </div>
               </div>
@@ -2991,7 +2992,7 @@ function MeetingsPanel({session,showToast}){
               </div>
               <div style={{display:"flex",gap:4,flexDirection:"column",alignItems:"flex-end"}}>
                 {total>0?<div style={{display:"flex",gap:4}}><Badge label={`✓ ${present}`} color={C.success}/><Badge label={`✗ ${total-present}`} color={C.danger}/></div>:<Badge label="Sem presença" color="#94a3b8"/>}
-                {meeting.photos_link&&<a href={meeting.photos_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.primary,fontWeight:600,display:"flex",alignItems:"center",gap:3,textDecoration:"none"}}><Icon name="link" size={11}/>Fotos</a>}
+                {meeting.photos_link&&<a href={safeUrl(meeting.photos_link)} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.primary,fontWeight:600,display:"flex",alignItems:"center",gap:3,textDecoration:"none"}}><Icon name="link" size={11}/>Fotos</a>}
               </div>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -3191,7 +3192,7 @@ function MeetingsPanel({session,showToast}){
                 <div style={{fontSize:13,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
                 {s.artist&&<div style={{fontSize:11,color:"#94a3b8"}}>{s.artist}</div>}
               </div>
-              {s.link&&<a href={s.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:C.primary,display:"flex"}}><Icon name="link" size={14}/></a>}
+              {s.link&&<a href={safeUrl(s.link)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:C.primary,display:"flex"}}><Icon name="link" size={14}/></a>}
             </button>
           )
         })}
@@ -3465,7 +3466,7 @@ function EventsPanel({session,showToast}){
             {ev.description&&<p style={{fontSize:12,color:"#64748b",margin:"0 0 8px",lineHeight:1.5}}>{ev.description}</p>}
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               <button onClick={()=>{setAttModal(ev);setMarks({})}} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:C.primary,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="check-circle" size={12}/>Presença</button>
-              {ev.photos_link&&<a href={ev.photos_link} target="_blank" rel="noopener noreferrer" style={{background:"#f0fdf4",border:"none",borderRadius:8,padding:"5px 10px",color:C.success,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4,textDecoration:"none"}}><Icon name="link" size={12}/>Fotos</a>}
+              {ev.photos_link&&<a href={safeUrl(ev.photos_link)} target="_blank" rel="noopener noreferrer" style={{background:"#f0fdf4",border:"none",borderRadius:8,padding:"5px 10px",color:C.success,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4,textDecoration:"none"}}><Icon name="link" size={12}/>Fotos</a>}
               <button onClick={()=>{setForm({title:ev.title,description:ev.description||"",date:ev.date,time:ev.time||"",location:ev.location||"",cell_id:ev.cell_id||"",type:ev.type,photos_link:ev.photos_link||""});setEditing(ev.id);setModal(true)}} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",color:"#64748b",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Icon name="edit" size={12}/>Editar</button>
             </div>
           </Card>
@@ -3699,8 +3700,8 @@ function SongsPanel({session,showToast}){
                     </div>
                   </div>
                   <div style={{display:"flex",gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                    {s.yt&&<a href={s.yt} target="_blank" rel="noopener noreferrer" style={{background:"#fee2e2",borderRadius:8,padding:"5px 8px",color:"#dc2626",textDecoration:"none",fontSize:12,fontWeight:700}}>▶</a>}
-                    {(s.cifra||s.cf)&&<a href={s.cifra||s.cf} target="_blank" rel="noopener noreferrer" style={{background:"#fef3c7",borderRadius:8,padding:"5px 8px",color:"#d97706",textDecoration:"none",fontSize:12}}>🎸</a>}
+                    {s.yt&&<a href={safeUrl(s.yt)} target="_blank" rel="noopener noreferrer" style={{background:"#fee2e2",borderRadius:8,padding:"5px 8px",color:"#dc2626",textDecoration:"none",fontSize:12,fontWeight:700}}>▶</a>}
+                    {(s.cifra||s.cf)&&<a href={safeUrl(s.cifra||s.cf)} target="_blank" rel="noopener noreferrer" style={{background:"#fef3c7",borderRadius:8,padding:"5px 8px",color:"#d97706",textDecoration:"none",fontSize:12}}>🎸</a>}
                     {canEdit&&filterTab==="approved"&&<button onClick={()=>openEdit(s)} style={{background:C.primary+"15",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.primary,display:"flex"}}><Icon name="edit" size={14}/></button>}
                     {canEdit&&filterTab==="approved"&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:7,cursor:"pointer",color:C.danger,display:"flex"}}><Icon name="trash" size={14}/></button>}
                   </div>
@@ -3890,17 +3891,17 @@ function StudiesPanel({session,showToast}){
             </div>
             <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
               {s.link&&(
-                <a href={s.link} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:C.primary,borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:`0 2px 8px ${C.primary}40`}}>
+                <a href={safeUrl(s.link)} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:C.primary,borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:`0 2px 8px ${C.primary}40`}}>
                   <Icon name="link" size={14}/>Acessar Estudo
                 </a>
               )}
               {s.link_kids&&(
-                <a href={s.link_kids} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f59e0b",borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:"0 2px 8px rgba(245,158,11,0.4)"}}>
+                <a href={safeUrl(s.link_kids)} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f59e0b",borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:"0 2px 8px rgba(245,158,11,0.4)"}}>
                   <Icon name="star" size={14}/>👧 Estudo Kids
                 </a>
               )}
               {s.link_youth&&(
-                <a href={s.link_youth} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:"#7c3aed",borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:"0 2px 8px rgba(124,58,237,0.4)"}}>
+                <a href={safeUrl(s.link_youth)} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,background:"#7c3aed",borderRadius:10,padding:"8px 16px",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:700,boxShadow:"0 2px 8px rgba(124,58,237,0.4)"}}>
                   <Icon name="star" size={14}/>🧑 Estudo Jovens
                 </a>
               )}
